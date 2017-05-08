@@ -1,0 +1,8 @@
+<ExtractVariables name='##'>
+    <Source>error</Source>
+    <JSONPayload>
+        <Variable name='errorMessage' type='string'>
+            <JSONPath>$.fault.faultstring</JSONPath>
+        </Variable>
+    </JSONPayload>
+</ExtractVariables>

@@ -1,0 +1,14 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <Remove>
+    <QueryParams>
+      <QueryParam name='${1:apikey}'/>
+    </QueryParams>
+    <Headers>
+      <Header name='${2:apikey}'/>
+    </Headers>
+  </Remove>
+  <IgnoreUnresolvedVariables>${3:$$(yas-choose-value (list "true" "false"))}</IgnoreUnresolvedVariables>
+  <AssignTo createNew='false' transport='http'
+            type='${4:$$(yas-choose-value (list "request" "response"))}'></AssignTo>
+</AssignMessage>

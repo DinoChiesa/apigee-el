@@ -1,0 +1,25 @@
+<XMLToJSON name='##'>
+  <Source>${1:$$(yas-choose-value '(\"request\" \"response\" ))}</Source>
+  <OutputVariable>${1:$(yas-text)}.content</OutputVariable>
+  <Format>yahoo</Format>
+  <!--
+  <Options>
+    <RecognizeNumber>true</RecognizeNumber>
+    <RecognizeBoolean>true</RecognizeBoolean>
+    <RecognizeNull>true</RecognizeNull>
+      <NullValue>NULL</NullValue>
+      <NamespaceSeparator>***</NamespaceSeparator>
+      <NamespaceBlockName>#namespaces</NamespaceBlockName>
+      <DefaultNamespaceNodeName>&amp;</DefaultNamespaceNodeName>
+      <TextAlwaysAsProperty>false</TextAlwaysAsProperty>
+      <TextNodeName>TEXT</TextNodeName>
+      <AttributeBlockName>ATT_BLOCK</AttributeBlockName>
+      <AttributePrefix>ATT_</AttributePrefix>
+      <StripLevels>3</StripLevels>
+      <TreatAsArray>
+        <Path unwrap='true'>${1:school/teachers}</Path>
+        <Path unwrap='false'>${2:school/teachers/students}</Path>
+      </TreatAsArray>
+    </Options>
+  -->
+</XMLToJSON>

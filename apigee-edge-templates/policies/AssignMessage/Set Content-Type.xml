@@ -1,0 +1,12 @@
+<AssignMessage name='##'>
+  <AssignTo createNew='false' type='${1:$$(yas-choose-value (list "request" "response"))}'/>
+  <!-- force content-type. This may be required to allow correct
+       functioning of subsequent policies such as XMLToJSON, JSONtoXML,
+       XSLT, or ExtractVariables. -->
+  <Set>
+    <Headers>
+      <Header name='Content-Type'>${1:$$(yas-choose-value (list
+      "application/json" "application/xml" "text/plain"))}</Header>
+    </Headers>
+  </Set>
+</AssignMessage>

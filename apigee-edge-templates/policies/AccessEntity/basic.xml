@@ -1,0 +1,11 @@
+<AccessEntity name='##'>
+    <!-- created at ${1:$$(format-time-string "%Y-%m-%dT%T%z" (current-time) t)} -->
+  <EntityType value='${2:$$(yas-choose-value (list "apiproduct" "app" "company" "companydeveloper" "consumerkey" "developer"))}' />
+  <EntityIdentifier type='${3:$$(yas-choose-value (let ((field1 (apigee--snippet-field 1))) (apigee-entity-id-types (buffer-substring-no-properties (yas--field-start field1) (yas--field-end field1)))))}' ref='${4:varName}' />
+  <!-- SecondaryIdentifier is not always required -->
+  <SecondaryIdentifier type='$5' ref='$6' />
+<!--
+  The result is stored in a variable:  AccessEntity.##
+  Next step is to use ExtractVariables to get a value from that entity.
+-->
+</AccessEntity>

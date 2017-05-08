@@ -1,0 +1,19 @@
+<AssignMessage name='##'>
+  <AssignTo createNew='false' type='${1:$$(yas-choose-value (list "request" "response"))}'/>
+  <Set>
+    <QueryParams>
+      <QueryParam name='${2:outgoingParamName}'>{request.queryparam.url}</QueryParam>
+      <QueryParam name='apiKey'>Something</QueryParam>
+    </QueryParams>
+    <Headers>
+      <Header name='Content-Type'>application/json</Header>
+    </Headers>
+    <Verb>GET</Verb>
+  </Set>
+  <!-- Set other flow variables for use in the final response -->
+  <AssignVariable>
+    <Name>urlshortener.longUrl</Name>
+    <Ref>request.queryparam.url</Ref>
+    <Value>this-value-is-used-when-the-Ref-is-unresolvable</Value>
+  </AssignVariable>
+</AssignMessage>

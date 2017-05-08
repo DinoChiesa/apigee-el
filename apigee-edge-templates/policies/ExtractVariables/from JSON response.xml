@@ -1,0 +1,9 @@
+<ExtractVariables name='##'>
+  <Source>tokenResponse</Source>
+  <VariablePrefix>$1</VariablePrefix>
+  <JSONPayload>
+    <Variable name='$2'>
+       <JSONPath>\\$.$3</JSONPath>
+    </Variable>
+  </JSONPayload>
+</ExtractVariables>

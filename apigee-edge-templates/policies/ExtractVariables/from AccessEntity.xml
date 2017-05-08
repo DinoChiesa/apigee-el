@@ -1,0 +1,12 @@
+<ExtractVariables name='##'>
+  <Source>AccessEntity.AccessEntity-${1:1}</Source>
+  <VariablePrefix>entity</VariablePrefix>
+  <XMLPayload>
+    <Variable name='${2:varname1}' type='string'>
+      <XPath>/Developer/Attributes/Attribute[Name='$2']/Value/text()</XPath>
+    </Variable>
+    <Variable name='${3:varname2}' type='string'>
+      <XPath>/Developer/Attributes/Attribute[Name='$3']/Value/text()</XPath>
+    </Variable>
+  </XMLPayload>
+</ExtractVariables>

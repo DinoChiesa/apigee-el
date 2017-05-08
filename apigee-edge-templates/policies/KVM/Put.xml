@@ -1,0 +1,11 @@
+<KeyValueMapOperations name='##' mapIdentifier='${1:nameOfMap}'>
+  <Scope>${2:$$(yas-choose-value '(\"organization\" \"environment\" \"apiproxy\"))}</Scope>
+  <Put override='true'>
+    <Key>
+      <Parameter ref='${3:variable.containing.key}'/>
+    </Key>
+    <Value ref='${4:variable.containing.value.to.store}'/>
+    <Value ref='${5:another.variable.with.a.value.to.store}'/>
+  </Put>
+  <ExpiryTimeInSecs>10</ExpiryTimeInSecs>
+</KeyValueMapOperations>

@@ -1,0 +1,26 @@
+<Quota name='##'>
+  <Interval ref='apiproduct.developer.quota.interval'/>
+  <TimeUnit ref='apiproduct.developer.quota.timeunit'/>
+  <Allow countRef='apiproduct.developer.quota.limit'/>
+  <Identifier ref='client_id'/>
+  <Distributed>true</Distributed>
+  <Synchronous>false</Synchronous>
+  <PreciseAtSecondsLevel>false</PreciseAtSecondsLevel>
+<!--
+variables set by this policy include:
+
+ratelimit.{policy_name}.allowed.count
+ratelimit.{policy_name}.used.count
+ratelimit.{policy_name}.available.count
+ratelimit.{policy_name}.exceed.count
+ratelimit.{policy_name}.total.exceed.count
+ratelimit.{policy_name}.expiry.time
+ratelimit.{policy_name}.identifier
+ratelimit.{policy_name}.class
+ratelimit.{policy_name}.class.allowed.count
+ratelimit.{policy_name}.class.used.count
+ratelimit.{policy_name}.class.available.count
+ratelimit.{policy_name}.class.exceed.count
+ratelimit.{policy_name}.class.total.exceed.count
+-->
+</Quota>

@@ -1,0 +1,13 @@
+<ExtractVariables name='##'>
+  <Source>{$1:request}</Source>
+  <!-- <VariablePrefix>soap</VariablePrefix> -->
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <XMLPayload>
+    <Namespaces>
+      <Namespace prefix='soap'>http://schemas.xmlsoap.org/soap/envelope/</Namespace>
+    </Namespaces>
+    <Variable name='topLevelRequestElement' type='string'>
+      <XPath>local-name(/soap:Envelope/soap:Body/*[1])</XPath>
+    </Variable>
+  </XMLPayload>
+</ExtractVariables>

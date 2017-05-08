@@ -1,0 +1,5 @@
+<JSONToXML name='##'>
+  <Source>${1:$$(yas-choose-value '(\"request\" \"response\" ))}</Source>
+  <OutputVariable>${2:$$(yas-choose-value '(\"request\" \"response\" ))}</OutputVariable>
+  <Options/>
+</JSONToXML>

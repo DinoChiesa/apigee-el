@@ -1,0 +1,7 @@
+<AssignMessage name='##'>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <AssignVariable>
+    <Name>${1:originalRequestHeaders}_${2:$$(yas-choose-value (list "Content-Type" "Accept"))}</Name>
+    <Ref>request.header.$2</Ref>
+  </AssignVariable>
+</AssignMessage>

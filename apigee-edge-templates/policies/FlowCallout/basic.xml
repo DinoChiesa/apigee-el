@@ -1,0 +1,3 @@
+<FlowCallout name='##'>
+    <SharedFlowBundle>${1:Shared-Flow-Name}</SharedFlowBundle>
+</FlowCallout>

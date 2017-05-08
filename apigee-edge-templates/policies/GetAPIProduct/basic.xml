@@ -1,0 +1,5 @@
+<GetAPIProduct name='##'>
+    <!-- http://apigee.com/docs/api-platform/content/retrieve-api-product-settings-using-getapiproduct -->
+    <!-- values will be stored in getapiproduct.##.apiproduct.name ... etc -->
+    <APIProduct>${1:PremiumAPIProductName}</APIProduct>
+</GetAPIProduct>

@@ -1,0 +1,27 @@
+<ServiceCallout name='##'>
+  <DisplayName>##</DisplayName>
+  <Request variable='authenticationRequest'>
+        <Set>
+          <!-- Shows how to request a token from usergrid. -->
+          <!-- FIXME: should retrieve secrets from vault -->
+           <Payload contentType='application/json'>{
+    "grant_type":"client_credentials",
+    "client_id":"whatever",
+    "client_secret":"something-secret"
+}</Payload>
+         <Verb>POST</Verb>
+         <Path>/demo24/wagov1/token</Path>
+      </Set>
+  </Request>
+  <Response>tokenResponse</Response>
+  <HTTPTargetConnection>
+    <SSLInfo>
+        <Enabled>true</Enabled>
+        <IgnoreValidationErrors>true</IgnoreValidationErrors>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 4xx, 5xx</Property>
+    </Properties>
+    <URL>${1:https://api.example.com/}</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

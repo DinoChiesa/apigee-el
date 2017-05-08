@@ -1,0 +1,9 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <AssignVariable>
+    <Name>parsedRequest.client_id</Name>
+    <Ref>request.queryparam.client_id</Ref>
+    <Value>BADDBEEF</Value>
+  </AssignVariable>
+</AssignMessage>

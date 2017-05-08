@@ -1,0 +1,13 @@
+<ExtractVariables name='##'>
+  <!-- <VariablePrefix>openidconnect</VariablePrefix> -->
+  <Header name='Authorization'>
+    <Pattern>Bearer {oidc_access_token}</Pattern>
+  </Header>
+  <QueryParam name='access_token'>
+    <Pattern>{oidc_access_token}</Pattern>
+  </QueryParam>
+  <QueryParam name='token'>
+    <Pattern>{oidc_access_token}</Pattern>
+  </QueryParam>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+</ExtractVariables>

@@ -1,0 +1,19 @@
+<ExtractVariables name='##'>
+  <Source>$1</Source>
+  <!-- <VariablePrefix>entity</VariablePrefix> -->
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <XMLPayload>
+    <Namespaces>
+      <Namespace prefix='apigee'>http://www.apigee.com</Namespace>
+    </Namespaces>
+    <Variable name='${2:varname1}' type='string'>
+      <XPath>/apigee:$2/text()</XPath>
+    </Variable>
+    <Variable name='${3:varname2}' type='string'>
+      <XPath>/Developer/Attributes/Attribute[Name='$3']/Value/text()</XPath>
+    </Variable>
+    <Variable name='${4:varname3}' type='string'>
+      <XPath>/Developer/Attributes/Attribute[Name='$4']/Value/text()</XPath>
+    </Variable>
+  </XMLPayload>
+</ExtractVariables>

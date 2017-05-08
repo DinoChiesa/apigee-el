@@ -1,0 +1,17 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <!-- <AssignTo createNew='false' transport='http' type='response'></AssignTo> -->
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Set>
+    <Payload contentType='${2:$$(yas-choose-value (reverse (apigee--sort-strings (mapcar 'car apigee-message-payload-template-alist))))}'>${2:$(cadr (assoc yas-text apigee-message-payload-template-alist))}</Payload>
+    <StatusCode>${3:$$(yas-choose-value (reverse (apigee--sort-strings (mapcar 'car apigee-http-status-message-alist))))}</StatusCode>
+    <ReasonPhrase>${3:$(cadr (assoc yas-text apigee-http-status-message-alist))}</ReasonPhrase>
+  </Set>
+
+  <!-- Set this flow variable to indicate the response has been set -->
+  <AssignVariable>
+    <Name>customResponse_assigned</Name>
+    <Value>true</Value>
+  </AssignVariable>
+
+</AssignMessage>
