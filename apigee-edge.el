@@ -5,6 +5,9 @@
 (defvar edge--base-policy-template-dir nil
   "The directory from which policy templates have been most recently loaded")
 
+(defvar edge--most-recent-apiproxy-home nil
+  "The directory most recently used to store API Proxies.")
+
 (defconst edge--policytype-shortform
   (list
    '("AssignMessage" "AM")
@@ -35,7 +38,48 @@
 
 
 (defvar edge--policy-template-list nil
-  "A list of lists. For each element, the cons is a policy type name, eg \"AccessEntity\", and the cadr is a list of strings, each of which is a filename referring to a template for the policy. The actual filename is in (path-join edge--base-policy-template-dir policy-type filename)")
+  "A list of lists. For each element, the cons is a policy type name, eg \"AccessEntity\", and the cadr is a list of strings, each of which is a filename referring to a template for the policy. The actual filename will be in (edge--join-path-elements edge--base-policy-template-dir policy-type filename)")
+
+(defun edge--path-to-settings-file ()
+  "a function rturning the path to the settings file for apigee-edge.el"
+  (edge--join-path-elements user-emacs-directory "apigee-edge.dat"))
+
+
+(defun edge--get-string-from-file (file-path)
+  "Return content from file at FILE-PATH. It should be fully-qualified."
+  (with-temp-buffer
+    (insert-file-contents file-path)
+    (buffer-string)))
+
+(defun edge--restore-state ()
+  "function expected to be called on initial module load, that restores the previous state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
+  (let ((dat-file-path (edge--path-to-settings-file)))
+    (with-current-buffer (find-file-noselect dat-file-path)
+      (save-excursion
+        (goto-char (point-min))
+        (let ((settings-data (read (current-buffer))))
+          (dolist (one-setting settings-data)
+            (let ((setting-name (car one-setting)))
+              (if (cadr one-setting)
+                  (set (intern setting-name) (cadr one-setting))))))))))
+
+(defun edge--persist-state ()
+  "function expected to be called periodically to store the state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
+  (let ((dat-file-path (edge--path-to-settings-file))
+        (alist-to-write nil)
+        (settings-to-store (list "edge--most-recent-apiproxy-home" "edge--base-policy-template-dir")))
+    (dolist (setting-name settings-to-store)
+      (push (list setting-name (eval (intern setting-name))) alist-to-write))
+    (with-temp-file dat-file-path
+      (goto-char (point-min))
+      (erase-buffer)
+      (insert ";; settings for apigee-edge.el")
+      (newline)
+      (insert (concat ";; Stored: " (current-time-string)))
+      (newline)
+      (let ((print-length nil)) ;; to avoid truncating
+        (pp alist-to-write (current-buffer))))))  ;; print
+
 
 (defun edge--join-path-elements (root &rest dirs)
   "Joins a series of directories together, inserting slashes as necessary,
@@ -442,6 +486,45 @@ appropriate.
                  (concat "<Step><Name>" policy-name "</Name></Step>"))
                 (message "yank to add the step declaration...")
                 )))))))
+
+
+(defun edge-new-proxy (arg)
+  "Interactive fn that creates a new exploded proxy bundle directory
+structure. Prompts for the name of the API Proxy.
+
+When invoked with a prefix, this fn will prompt the user also for
+the name of the directory in which to store the apiproxy.
+
+When invoked without a prefix, it uses the most recent apiproxy
+home directory. If no directory has ever been used, it prompts.
+
+"
+  (interactive "P")
+  (let ((proxy-name (read-string "proxy name?: " nil nil nil))
+        (proxy-containing-dir
+         (if arg
+             (let ((homedir (concat (getenv "HOME") "/"))
+                   (candidate-list (and (boundp 'recentf-list)
+                                        (mapcar
+                                         (lambda (n) (file-name-directory n))
+                                         recentf-list))))
+               (add-to-list 'candidate-list apigee--most-recently-used-containing-dir)
+               (add-to-list 'candidate-list apigee-default-apiproxies-home)
+               (ido-completing-read "containing directory?: "
+                                        (mapcar (lambda (x)
+                                                  (replace-regexp-in-string homedir "~/" x))
+                                                (delq nil (delete-dups candidate-list))) nil nil nil))
+           (or apigee--most-recently-used-containing-dir apigee-default-apiproxies-home))))
+
+    (apigee-new-proxy-noninteractive proxy-name proxy-containing-dir)))
+
+
+
+;;; restore last known state
+(eval-after-load "apigee-edge"
+  '(progn
+     (edge--restore-state)))
+
 
 
 (provide 'apigee-edge)
