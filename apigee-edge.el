@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-May-30 16:45:25>
+;; Last-saved : <2017-May-30 16:55:59>
 ;;
 ;;; Commentary:
 ;;
@@ -52,9 +52,15 @@
 (defvar edge--verbose-logging nil
   "whether this module should log verbosely into *Messages*. This is an on/off variable. Set it to a truthy value to get logging.")
 
+(defvar edge--timer-minutes 24
+  "length of the interval in minutes between persisting Edge-emacs settings.")
+
+(defvar edge-timer nil
+  "cancellable timer, for saving Edge-emacs settings.")
+
 (defvar edge--list-of-vars-to-store-and-restore
-  (list "edge--verbose-logging" "edge--recently-used-apiproxy-homes" "edge--base-template-dir")
-  "a list of variables to store/restore in the sttings file.")
+  (list "edge--verbose-logging" "edge--recently-used-apiproxy-homes" "edge--base-template-dir" "edge--timer-minutes")
+  "a list of variables to store/restore in the settings file.")
 
 (defvar edge--settings-file-base-name "apigee-edge.dat")
 
@@ -652,8 +658,10 @@ directory. If no directory has ever been used, it prompts for the directory.
          (if arg
              (edge--prompt-for-containing-dir)
            (or (car edge--recently-used-apiproxy-homes) (edge--prompt-for-containing-dir)))))
+    ;; remember this containing dir if it is new (aka unique)
+    (if (not (member proxy-containing-dir edge--recently-used-apiproxy-homes))
+        (push proxy-containing-dir edge--recently-used-apiproxy-homes))
     (edge-new-proxy-from-template proxy-name proxy-template proxy-containing-dir)))
-
 
 
 ;;; restore last known state
@@ -662,7 +670,8 @@ directory. If no directory has ever been used, it prompts for the directory.
      (edge--restore-state)
      (if edge--base-template-dir
          (edge-load-templates edge--base-template-dir))
-     ))
+     (setq edge-timer
+      (run-with-timer (* 60 edge--timer-minutes) (* 60 edge--timer-minutes) 'edge--persist-state))))
 
 
 (provide 'apigee-edge)
