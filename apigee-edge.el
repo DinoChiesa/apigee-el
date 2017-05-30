@@ -100,11 +100,10 @@ lexicographically by the car of each element, which is a string."
 (defun edge--get-template-contents (ptype template-filename)
   "return the contents of the policy template file"
   (let ((filename
-         (edge--join-path-elements edge--base-policy-template-dir ptype template-filename)))
+         (edge--join-path-elements edge--base-policy-template-dir template-filename)))
     (with-temp-buffer
       (insert-file-contents filename)
       (buffer-substring-no-properties (point-min) (point-max)))))
-
 
 (defun edge--templates-for-one-policy-type (policy-type)
   "loads the policy templates for one POLICY-TYPE, which is a fully-qualified
@@ -134,7 +133,9 @@ the name of the template in the resulting menu.
 "
   (interactive
    (list
-    (read-directory-name "the policy template dir?: " nil nil t)
+    (read-directory-name
+     "the policy template dir?: "
+     edge--base-policy-template-dir edge--base-policy-template-dir t)
     t))
 
   ;; (unless yas-snippet-dirs
@@ -148,7 +149,7 @@ the name of the template in the resulting menu.
              (edge--templates-for-one-policy-type policy-type)
              template-list)
             (message "policy type %s" policy-type))
-          (edge--sort-by-string-car template-list)))
+          (reverse (edge--sort-by-string-car template-list))))
 
   (when interactive
     (message "Loaded %d templates from %s." (edge--template-count) top-level-dir))
@@ -224,20 +225,43 @@ multi-level popup menu.
       (let* ((template-set (nth j candidates))
              (cat (car template-set))
              (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
-
-        (if (= (length templates) 1)
-            (let ((template (car templates)))
-              (define-key keymap (vector (intern cat) (intern template))
-                (cons (edge--trim-suffix template) n)))
-
           (define-key keymap (vector (intern cat)) (cons cat (make-sparse-keymap cat)))
           (dolist (template templates)
-            (define-key keymap (vector (intern cat) (intern template)) (cons (edge--trim-suffix template) n)))))
+            (define-key keymap
+              (vector (intern cat) (edge--join-path-elements cat template))
+              (cons (edge--trim-suffix template) n))
+            ))
 
       (setq j (1+ j)))
-
-    ;; this works with popup-menu
     keymap))
+
+
+;; (let ((keymap (make-sparse-keymap "Insert a policy..."))
+;;         (n 0) ;; need for cons cell
+;;         (j 0)
+;;         (len (length candidates))
+;;         (sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
+;;
+;;     (while (< j len)
+;;       (let* ((template-set (nth j candidates))
+;;              (cat (car template-set))
+;;              (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
+;;
+;;         (if (= (length templates) 1)
+;;             (let ((template (car templates)))
+;;               (define-key keymap (vector (intern cat) (intern template))
+;;                 (cons (edge--trim-suffix template) n)))
+;;
+;;           (define-key keymap (vector (intern cat)) (cons cat (make-sparse-keymap cat)))
+;;           (dolist (template templates)
+;;             (define-key keymap (vector (intern cat) (intern template)) (cons (edge--trim-suffix template) n)))))
+;;
+;;       (setq j (1+ j)))
+;;
+;;     ;; this works with popup-menu
+;;     keymap)
+
+
 
 
 
@@ -315,19 +339,32 @@ if no file exists by that name in the given proxy.
     (not (file-exists-p filename-to-check))))
 
 
-(defun edge--suggested-policy-name (ptype flavor)
+(defun edge--suggested-policy-name (ptype)
   "Returns a string that contains a default policy name, uses a counter
 that is indexed per policy type within each API Proxy.
 "
   (let ((ptype (or (cadr (assoc ptype edge--policytype-shortform)) ptype))
-        (flavor (s-replace " " "-" (edge--trim-suffix flavor))))
-    (let ((val 1)
-          (next-name (lambda (v) (concat ptype "-" flavor "-" (format "%d" v)))))
+        (val 1)
+        (next-name (lambda (v) (concat ptype "-" (format "%d" v)))))
       (let ((pname (funcall next-name val)))
         (while (not (edge--policy-name-is-available pname))
           (setq val (1+ val)
                 pname (funcall next-name val)))
-        pname))))
+        pname)))
+
+;; (defun edge--suggested-policy-name (ptype flavor)
+;;   "Returns a string that contains a default policy name, uses a counter
+;; that is indexed per policy type within each API Proxy.
+;; "
+;;   (let ((ptype (or (cadr (assoc ptype edge--policytype-shortform)) ptype))
+;;         (flavor (s-replace " " "-" (edge--trim-suffix flavor))))
+;;     (let ((val 1)
+;;           (next-name (lambda (v) (concat ptype "-" flavor "-" (format "%d" v)))))
+;;       (let ((pname (funcall next-name val)))
+;;         (while (not (edge--policy-name-is-available pname))
+;;           (setq val (1+ val)
+;;                 pname (funcall next-name val)))
+;;         pname))))
 
 
 
@@ -351,7 +388,7 @@ appropriate.
           ;; template-file (nth 1 choice)
           (let ((policy-dir (concat apiproxy-dir "apiproxy/policies/"))
                 (ptype (symbol-name (nth 0 choice)))
-                (template-filename (symbol-name (nth 1 choice)))
+                (template-filename (nth 1 choice))
                 (have-name nil)
                 (policy-name-prompt "policy name: "))
 
@@ -359,7 +396,7 @@ appropriate.
                    (make-directory policy-dir))
 
               (let* ((raw-template (edge--get-template-contents ptype template-filename))
-                     (default-value (edge--suggested-policy-name ptype template-filename))
+                     (default-value (edge--suggested-policy-name ptype))
                      (policy-name
                       (let (n)
                         (while (not have-name)

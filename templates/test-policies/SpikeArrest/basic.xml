@@ -1,0 +1,8 @@
+<SpikeArrest name='##'>
+    <DisplayName>##</DisplayName>
+    <!-- Identifier: optional -->
+    <Identifier ref='request.header.some-header-name'/>
+    <!-- MessageWeight: optional -->
+    <MessageWeight ref='request.header.weight'/>
+    <Rate>30ps</Rate>
+</SpikeArrest>
