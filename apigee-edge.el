@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-May-30 16:55:59>
+;; Last-saved : <2017-May-30 17:08:32>
 ;;
 ;;; Commentary:
 ;;
@@ -64,6 +64,9 @@
 
 (defvar edge--settings-file-base-name "apigee-edge.dat")
 
+(defvar edge--load-file-name load-file-name
+  "The name from which the Apigee Edge module was loaded.")
+
 (defconst edge--policytype-shortform
   (list
    '("AssignMessage" "AM")
@@ -103,12 +106,6 @@
 (defun edge--path-to-settings-file ()
   "a function rturning the path to the settings file for apigee-edge.el"
   (edge--join-path-elements user-emacs-directory edge--settings-file-base-name))
-
-;; (defun edge--get-string-from-file (file-path)
-;;   "Return content from file at FILE-PATH. It should be fully-qualified."
-;;   (with-temp-buffer
-;;     (insert-file-contents file-path)
-;;     (buffer-string)))
 
 (defun edge--restore-state ()
   "function expected to be called on initial module load, that restores the previous state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
@@ -355,36 +352,6 @@ multi-level popup menu.
       (setq j (1+ j)))
     keymap))
 
-
-;; (let ((keymap (make-sparse-keymap "Insert a policy..."))
-;;         (n 0) ;; need for cons cell
-;;         (j 0)
-;;         (len (length candidates))
-;;         (sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
-;;
-;;     (while (< j len)
-;;       (let* ((template-set (nth j candidates))
-;;              (cat (car template-set))
-;;              (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
-;;
-;;         (if (= (length templates) 1)
-;;             (let ((template (car templates)))
-;;               (define-key keymap (vector (intern cat) (intern template))
-;;                 (cons (edge--trim-suffix template) n)))
-;;
-;;           (define-key keymap (vector (intern cat)) (cons cat (make-sparse-keymap cat)))
-;;           (dolist (template templates)
-;;             (define-key keymap (vector (intern cat) (intern template)) (cons (edge--trim-suffix template) n)))))
-;;
-;;       (setq j (1+ j)))
-;;
-;;     ;; this works with popup-menu
-;;     keymap)
-
-
-
-
-
 (defun edge--prompt-user-with-policy-choices ()
   "Prompt the user with the available choices.
 In this context the available choices is the hierarchical list
@@ -401,7 +368,6 @@ of available policies.
     (x-popup-menu (edge--get-menu-position)
                   (edge--generate-policy-menu edge--policy-template-alist)))
 
-
 (defun edge--is-existing-directory (dir-name)
   "Tests to see whether a name refers to an existing directory."
   (and
@@ -410,7 +376,6 @@ of available policies.
      (and
       (car attrs)
       (not (stringp (car attrs)))))))
-
 
 (defun edge--path-of-apiproxy ()
   "Returns the path of the directory that contains the
@@ -449,7 +414,6 @@ It always ends in slash.
                     (mapconcat 'identity r "/") )))))))
     (and path (file-truename path))))
 
-
 (defun edge--policy-name-is-available (pname)
   "Return true if the passed policy name PNAME is unused, in other words
 if no file exists by that name in the given proxy.
@@ -457,7 +421,6 @@ if no file exists by that name in the given proxy.
   (let ((filename-to-check
          (concat (edge--path-of-apiproxy) "apiproxy/policies/" pname ".xml")))
     (not (file-exists-p filename-to-check))))
-
 
 (defun edge--suggested-policy-name (ptype)
   "Returns a string that contains a default policy name, uses a counter
@@ -471,7 +434,6 @@ that is indexed per policy type within each API Proxy.
           (setq val (1+ val)
                 pname (funcall next-name val)))
         pname)))
-
 
 ;;;###autoload
 (defun edge-add-policy ()
@@ -604,7 +566,6 @@ changing names and replacing / expanding things as appropriate."
     ))
 
 
-
 (defun edge-new-proxy-from-template (proxy-name template-name containing-dir)
   "Non-interactive function to create a new proxy.
 PROXY-NAME should be the name of the to-be-created proxy.
@@ -664,14 +625,16 @@ directory. If no directory has ever been used, it prompts for the directory.
     (edge-new-proxy-from-template proxy-name proxy-template proxy-containing-dir)))
 
 
-;;; restore last known state
+;; restore last known state, and set a timer to persist state periodically
 (eval-after-load "apigee-edge"
   '(progn
      (edge--restore-state)
+     (if (not edge--base-template-dir)
+         (setq edge--base-template-dir (concat (file-name-directory edge--load-file-name) "templates/")))
      (if edge--base-template-dir
          (edge-load-templates edge--base-template-dir))
      (setq edge-timer
-      (run-with-timer (* 60 edge--timer-minutes) (* 60 edge--timer-minutes) 'edge--persist-state))))
+           (run-with-timer (* 60 edge--timer-minutes) (* 60 edge--timer-minutes) 'edge--persist-state))))
 
 
 (provide 'apigee-edge)
