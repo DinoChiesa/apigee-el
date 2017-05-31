@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<APIProxy revision="2" name="sp_reverse_proxy">
+    <Basepaths>/v1/sp_reverse_proxy</Basepaths>
+    <ConfigurationVersion majorVersion="4" minorVersion="0"/>
+    <CreatedAt>1491498008040</CreatedAt>
+    <CreatedBy>soumya.paul@nwea.org</CreatedBy>
+    <Description></Description>
+    <DisplayName>sp_reverse_proxy</DisplayName>
+    <LastModifiedAt>1491517153495</LastModifiedAt>
+    <LastModifiedBy>soumya.paul@nwea.org</LastModifiedBy>
+    <Policies>
+        <Policy>Assign-Message-1</Policy>
+        <Policy>Create-Geocoding-Request</Policy>
+        <Policy>Extract-Initials</Policy>
+        <Policy>Quota-1</Policy>
+        <Policy>Verify-API-Key-1</Policy>
+    </Policies>
+    <ProxyEndpoints>
+        <ProxyEndpoint>default</ProxyEndpoint>
+    </ProxyEndpoints>
+    <Resources/>
+    <Spec></Spec>
+    <TargetServers/>
+    <TargetEndpoints>
+        <TargetEndpoint>default</TargetEndpoint>
+    </TargetEndpoints>
+    <validate>false</validate>
+</APIProxy>
