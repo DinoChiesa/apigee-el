@@ -11,18 +11,19 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-May-30 17:08:32>
+;; Last-saved : <2017-May-30 17:10:54>
 ;;
 ;;; Commentary:
 ;;
 ;; This module defines a few elisp functions that are handy for working
 ;; with API Proxy definition bundles within emacs. Per ejemplo,
-;;  - creating a new blank proxy
-;;  - zipping and importing a bundle
+;;  - creating a new blank proxy from a template
 ;;  - adding a new policy to a bundle
+;;
+;; Future possibilities:
 ;;  - adding a new target to a bundle
-;;  - retrieving / updating a single resource in an existing API Proxy
-;;  - validating a bundle (coming soon)
+;;  - zipping and importing a bundle
+;;  - validating a bundle
 ;;
 ;;; License
 ;;
