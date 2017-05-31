@@ -2,6 +2,62 @@
 
 Module for interacting with Apigee Edge, and for creating and modifying Apigee Edge assets.
 
+## Using
+
+Apigee Edge is an API platform that allows you to configure smart HTTP proxies for your APIs.  Within the proxies you can configure Apigee to do things like :
+ - verify an inbound API key
+ - verify an inbound OAuth 2.0 token
+ - rewrite the URL
+ - route the HTTP request
+ - inject or remove headers , query params
+ - modify the payload
+ - modify the verb
+ - and many other things.
+
+This module is an emacs-lisp module that adds capabilities to emacs to make it easier to create API proxies within the editor. Apigee Edge includes a User Interface with an interactive, graphical proxy designer. For people who like to work offline, this emacs-lisp module is somewhat similar.
+
+To use this module, put this in your .emacs file:
+
+```
+ (add-to-list 'load-path "~/elisp/apigee")
+ (require 'apigee-edge)
+```
+
+Then, you can invoke various commands:
+
+To add a new proxy:
+
+    M-x edge-new-proxy
+
+To specify the directory in which to store the new proxy:
+
+    C-u M-x edge-new-proxy
+
+To add a policy to an existing proxy, open a dired buffer to ../apiproxy and:
+
+    M-x edge-add-policy
+
+
+## Adding templates
+
+There are some templates for proxies and policies included in the module.
+If you wish to add to that set of templates, just drop more files into the approprpiate directories. Find them at <apigee-edge-el>/templates/proxies and
+<apigee-edge-el>/templates/policies .
+
+
+## Extensions
+
+Pull requests are welcome.
+
+Some ideas for extending this module:
+
+- import and deploy of API proxy bundles from emacs
+- listing/querying of Proxies, Products, Developers and Apps
+- read/update of KVM entries
+- support for shared flows
+
+
+
 ## License
 
 This material is Copyright 2017 Dino Chiesa and Google Inc.

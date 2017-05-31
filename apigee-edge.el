@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-May-30 17:10:54>
+;; Last-saved : <2017-May-31 09:29:26>
 ;;
 ;;; Commentary:
 ;;
@@ -24,6 +24,22 @@
 ;;  - adding a new target to a bundle
 ;;  - zipping and importing a bundle
 ;;  - validating a bundle
+;;
+;; To use this module, put this in your .emacs file:
+;;  (add-to-list 'load-path "~/elisp/apigee")
+;;  (require 'apigee-edge)
+;;
+;; Then, you can invoke various commands:
+;;
+;; To add a new proxy:
+;;   M-x edge-new-proxy
+;;
+;; To specify the directory in which to store the new proxy:
+;;   C-u M-x edge-new-proxy
+;;
+;; To add a policy to an existing proxy, open a dired buffer to ../apiproxy and:
+;;   M-x edge-add-policy
+;;
 ;;
 ;;; License
 ;;
