@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-May-31 09:29:26>
+;; Last-saved : <2017-May-31 18:29:39>
 ;;
 ;;; Commentary:
 ;;
@@ -111,6 +111,33 @@
    '("SetOAuthV2Info" "OAuth")
    '("DeleteOAuthV2Info" "OAuth")
    '("BasicAuthentication" "BA")))
+
+(defconst edge--http-status-message-alist
+  (list
+   '("200" "OK")
+   '("201" "Created")
+   '("302" "Moved")
+   '("304" "Not Modified")
+   '("400" "Bad Request")
+   '("401" "Not Authorized")
+   '("403" "Forbidden")
+   '("404" "Not Found")
+   '("410" "Gone")
+   '("429" "Too Many Requests")
+   '("500" "Server Error")
+   '("501" "Not Implemented")
+   '("503" "Server Busy")))
+
+(defconst edge--message-payload-sample-alist
+  (list
+   '("application/json" "{
+  \"status\" : true,
+  \"message\" : \"whatever\",
+  \"clientId\" : \"{parsedRequest.client_id}\"
+}
+")
+   '("application/x-www-form-urlencoded" "status=true&clientId={parsedRequest.client_id}")
+   '("application/xml" "<message><here>{parsedRequest.client_id}</here></message>")))
 
 
 (defvar edge--policy-template-alist nil
@@ -216,7 +243,7 @@ lexicographically by the car of each element, which is a string."
 (defun edge--get-template-contents (ptype template-filename)
   "return the contents of the policy template file"
   (let ((filename
-         (edge--join-path-elements (edge--policy-template-dir) template-filename)))
+         (edge--join-path-elements edge--base-template-dir "policies" template-filename)))
     (with-temp-buffer
       (insert-file-contents filename)
       (buffer-substring-no-properties (point-min) (point-max)))))
@@ -431,6 +458,20 @@ It always ends in slash.
                     (mapconcat 'identity r "/") )))))))
     (and path (file-truename path))))
 
+
+(defun edge--fixup-script-name (name &optional prefix)
+  "returns a stripped name suitable for use for a file in the resources/jsc directory,
+or resources/py, or resources/xsl."
+
+  (let* ((default-prefix "Javascript")
+         (real-prefix (concat (downcase (if (stringp prefix) prefix default-prefix)) "-"))
+         (pos (length real-prefix)))
+    (if (and (>= (length name) (length real-prefix))
+             (string= real-prefix (downcase (substring name 0 pos))))
+        (let ((s (substring name pos)))
+          (concat (downcase (substring s 0 1)) (substring s 1)))
+      name)))
+
 (defun edge--policy-name-is-available (pname)
   "Return true if the passed policy name PNAME is unused, in other words
 if no file exists by that name in the given proxy.
@@ -562,7 +603,8 @@ changing names and replacing / expanding things as appropriate."
         (let* ((this-dir (car subdirs))
                (source-subdir (edge--join-path-elements source-apiproxy-dir this-dir))
                (dest-subdir (edge--join-path-elements dest-apiproxy-dir this-dir)))
-          (copy-directory source-subdir dest-subdir t nil))
+          (if (edge--is-existing-directory source-subdir)
+              (copy-directory source-subdir dest-subdir t nil)))
         (setq subdirs (cdr subdirs))))
     ;; finally, if we can find a single XML file in the proxies dir, modify it
     (let* ((dest-proxies-dir (edge--join-path-elements dest-apiproxy-dir "proxies"))
@@ -581,7 +623,6 @@ changing names and replacing / expanding things as appropriate."
               (funcall serialize-xml-elt root))
             (save-buffer))))
     ))
-
 
 (defun edge-new-proxy-from-template (proxy-name template-name containing-dir)
   "Non-interactive function to create a new proxy.
