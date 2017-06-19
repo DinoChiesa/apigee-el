@@ -1,6 +1,7 @@
-AssignMessage full response.xml
-  need proper syntax for mapcar of car
+Thursday,  8 June 2017, 15:25
 
-properly implement edge--generate-policy-menu 
-  it does not work when the policy template dir contains just one file. 
+x Sharedflows - templates
+
+
+
 

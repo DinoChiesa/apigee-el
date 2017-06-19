@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-May-31 18:29:39>
+;; Last-saved : <2017-June-19 11:56:45>
 ;;
 ;;; Commentary:
 ;;
@@ -63,7 +63,7 @@
 (defvar edge--base-template-dir nil
   "The directory from which policy templates have been most recently loaded")
 
-(defvar edge--recently-used-apiproxy-homes nil
+(defvar edge--recently-used-asset-homes nil
   "a list of directories recently used to store API Proxies.")
 
 (defvar edge--verbose-logging nil
@@ -76,7 +76,7 @@
   "cancellable timer, for saving Edge-emacs settings.")
 
 (defvar edge--list-of-vars-to-store-and-restore
-  (list "edge--verbose-logging" "edge--recently-used-apiproxy-homes" "edge--base-template-dir" "edge--timer-minutes")
+  (list "edge--verbose-logging" "edge--recently-used-asset-homes" "edge--base-template-dir" "edge--timer-minutes")
   "a list of variables to store/restore in the settings file.")
 
 (defvar edge--settings-file-base-name "apigee-edge.dat")
@@ -146,6 +146,8 @@
 (defvar edge--proxy-template-alist nil
   "An alist, relating a name to a proxy template. The cadr of each entry is a string, a directory name, containing the exploded proxy template.")
 
+(defvar edge--sharedflow-template-alist nil
+  "An alist, relating a name to a template for a sharedflow. The cadr of each entry is a string, a directory name, containing the exploded sharedflow template.")
 
 (defun edge--path-to-settings-file ()
   "a function rturning the path to the settings file for apigee-edge.el"
@@ -265,19 +267,26 @@ populate the menu of available policy templates."
           (mapcar (lambda (item) (length (cadr item)))
                   edge--policy-template-alist)))
 
+(defun edge--load-asset-templates (sym label subdir)
+  "Load templates for a kind of asset from the template dir, then set the symbol to the alist."
+  (let ((top-level-dir (edge--join-path-elements edge--base-template-dir subdir )))
+    (set sym
+         (let (template-list)
+           (dolist (template-name (edge--proper-subdirs top-level-dir))
+             (push
+              (list (file-name-nondirectory template-name) template-name)
+              template-list)
+             (and edge--verbose-logging (message "%s template %s" label template-name)))
+           (reverse (edge--sort-by-string-car template-list))))
+    (list label (length (symbol-value sym)) top-level-dir)))
+
 (defun edge-load-proxy-templates ()
   "Load proxy templates from the proxy template dir. "
-  (let ((top-level-dir (edge--join-path-elements edge--base-template-dir "proxies")))
-    (setq
-        edge--proxy-template-alist
-        (let (template-list)
-          (dolist (proxy-template-name (edge--proper-subdirs top-level-dir))
-            (push
-             (list (file-name-nondirectory proxy-template-name) proxy-template-name)
-             template-list)
-            (and edge--verbose-logging (message "proxy template %s" proxy-template-name)))
-          (reverse (edge--sort-by-string-car template-list))))
-    (list (length edge--proxy-template-alist) top-level-dir)))
+  (edge--load-asset-templates 'edge--proxy-template-alist "proxy" "proxies"))
+
+(defun edge-load-sharedflow-templates ()
+  "Load templates for sharedflows from the template dir. "
+  (edge--load-asset-templates 'edge--sharedflow-template-alist "sharedflow" "sharedflows"))
 
 (defun edge-load-policy-templates ()
   "Load policy templates from the policy template dir.
@@ -297,12 +306,13 @@ the name of the template in the resulting menu.
              template-list)
             (and edge--verbose-logging (message "policy type %s" policy-type)))
           (reverse (edge--sort-by-string-car template-list))))
-    (list (edge--template-count) top-level-dir)))
+    (list "policy" (edge--template-count) top-level-dir)))
 
 (defun edge-load-templates (top-level-dir &optional interactive)
   "Load templates for proxies and policies from the top level directory TOP-LEVEL-DIR.
 
-Under TOP-LEVEL-DIR there should be sub-directories named \"policies\" and \"proxies\".
+Under TOP-LEVEL-DIR there should be sub-directories named \"policies\", \"proxies\",
+and \"sharedflows\".
 Within each of those, there will be templates for those entities.
 "
   (interactive
@@ -312,11 +322,16 @@ Within each of those, there will be templates for those entities.
      edge--base-template-dir edge--base-template-dir t)
     t))
   (setq edge--base-template-dir top-level-dir)
-  (let ((results (list (edge-load-proxy-templates) (edge-load-policy-templates) )))
+  (let ((results (list (edge-load-proxy-templates)
+                       (edge-load-policy-templates)
+                       (edge-load-sharedflow-templates)
+                       )))
     (when interactive
-      (message "Loaded templates: [%d proxy, %d policy] from %s."
-               (car (car results))
-               (car (cadr results))
+      (message "Loaded templates: [%s] from %s"
+               (mapconcat
+                (lambda (x) (format "%d %s" (cadr x) (car x)))
+                results
+                ", ")
                top-level-dir))))
 
 (defun edge--trim-suffix (s)
@@ -563,25 +578,40 @@ appropriate.
               (message "yank to add the step declaration...")
               )))))))
 
+(defun edge--serialize-xml-elt (elt)
+  "Serialize an XML element into the current buffer, and then collapse newlines."
+  (erase-buffer)
+  (xml-print elt)
+  (goto-char (point-min))
+  (while (re-search-forward "\n\\([\s]*\n\\)+" (point-max) t)
+    (replace-match "\n")))
+
+(defun edge--verify-exactly-one (xml-file-list source-dir)
+  "verifies that there is exactly one xml file."
+      (if (not xml-file-list)
+          (error
+           (message "[apigee-edge] cannot find XML file in %s, in `edge--verify-exactly-one'" source-dir)))
+      (if (not (= (length xml-file-list) 1))
+          (error
+           (message "[apigee-edge] found more than one XML file in %s, in `edge--verify-exactly-one'" source-dir))))
+
+(defun edge--copy-subdirs (subdirs source-dir dest-dir)
+  (while subdirs
+        (let* ((this-dir (car subdirs))
+               (source-subdir (edge--join-path-elements source-dir this-dir))
+               (dest-subdir (edge--join-path-elements dest-dir this-dir)))
+          (if (edge--is-existing-directory source-subdir)
+              (copy-directory source-subdir dest-subdir t nil)))
+        (setq subdirs (cdr subdirs))))
+
 (defun edge--copy-proxy-template-files (proxy-name source destination)
   "copy files from the SOURCE template directory to the DESTINATION directory,
 changing names and replacing / expanding things as appropriate."
   (let ((source-apiproxy-dir (edge--join-path-elements source "apiproxy"))
-        (dest-apiproxy-dir (edge--join-path-elements destination "apiproxy"))
-        (serialize-xml-elt (lambda (elt)
-                             (erase-buffer)
-                             (xml-print elt)
-                             (goto-char (point-min))
-                             (while (re-search-forward "\n\\([\s]*\n\\)+" (point-max) t)
-                               (replace-match "\n")))))
-    ;; verify that there is exactly one XML file.
+        (dest-apiproxy-dir (edge--join-path-elements destination "apiproxy")))
+
     (let ((xml-file-list (edge--proper-files source-apiproxy-dir ".xml")))
-      (if (not xml-file-list)
-          (error
-           (message "[apigee-edge] cannot find XML file in %s, in `edge--copy-proxy-template-files'" source-apiproxy-dir)))
-      (if (not (= (length xml-file-list) 1))
-          (error
-           (message "[apigee-edge] found more than one XML file in %s, in `edge--copy-proxy-template-files'" source-apiproxy-dir)))
+      (edge--verify-exactly-one xml-file-list source-apiproxy-dir)
       ;; create the toplevel destination directory
       (make-directory dest-apiproxy-dir t)
       ;; copy, then intelligently modify the toplevel proxy bundle definition file
@@ -595,23 +625,17 @@ changing names and replacing / expanding things as appropriate."
                (display-name-elt (car (xml-get-children apiproxy-elt 'DisplayName))))
             (setcdr (assq 'name apiproxy-elt-attrs) proxy-name)
             (setcar (cddr display-name-elt) proxy-name)
-            (funcall serialize-xml-elt root))
+            (edge--serialize-xml-elt root))
           (save-buffer))))
-    ;; copy all the sub-directories
-    (let ((subdirs (list "proxies" "policies" "resources" "targets")))
-      (while subdirs
-        (let* ((this-dir (car subdirs))
-               (source-subdir (edge--join-path-elements source-apiproxy-dir this-dir))
-               (dest-subdir (edge--join-path-elements dest-apiproxy-dir this-dir)))
-          (if (edge--is-existing-directory source-subdir)
-              (copy-directory source-subdir dest-subdir t nil)))
-        (setq subdirs (cdr subdirs))))
-    ;; finally, if we can find a single XML file in the proxies dir, modify it
-    (let* ((dest-proxies-dir (edge--join-path-elements dest-apiproxy-dir "proxies"))
-           (xml-file-list (edge--proper-files dest-proxies-dir ".xml")))
+
+    (edge--copy-subdirs (list "proxies" "policies" "resources" "targets") source-apiproxy-dir dest-apiproxy-dir)
+
+    ;; if we can find a single XML file in the proxies dir, modify it
+    (let* ((dest-proxyendpoints-dir (edge--join-path-elements dest-apiproxy-dir "proxies"))
+           (xml-file-list (edge--proper-files dest-proxyendpoints-dir ".xml")))
       (if (not xml-file-list)
           (error
-           (message "[apigee-edge] cannot find XML file in %s, in `edge--copy-proxy-template-files'" dest-proxies-dir)))
+           (message "[apigee-edge] cannot find XML file in %s, in `edge--copy-proxy-template-files'" dest-proxyendpoints-dir)))
       (if (= (length xml-file-list) 1)
           (with-current-buffer (find-file-noselect (car xml-file-list))
             (let*
@@ -620,35 +644,62 @@ changing names and replacing / expanding things as appropriate."
                  (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
                  (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
               (setcar (cddr basepath-elt) (concat "/" proxy-name))
-              (funcall serialize-xml-elt root))
-            (save-buffer))))
+              (edge--serialize-xml-elt root))
+            (save-buffer 0))))
     ))
 
-(defun edge-new-proxy-from-template (proxy-name template-name containing-dir)
-  "Non-interactive function to create a new proxy.
-PROXY-NAME should be the name of the to-be-created proxy.
-TEMPLATE-NAME should be the name of the proxy template, as stored in the templates/proxies directory.
-CONTAINING-DIR is the name of an existing directory in which to insert the new proxy.
+(defun edge--copy-sharedflow-template-files (sf-name source destination)
+  "copy files from the SOURCE template directory to the DESTINATION directory,
+changing names and replacing / expanding things as appropriate."
+  (let ((source-sf-dir (edge--join-path-elements source "sharedflowbundle"))
+        (dest-sf-dir (edge--join-path-elements destination "sharedflowbundle")))
+    (let ((xml-file-list (edge--proper-files source-sf-dir ".xml")))
+      (edge--verify-exactly-one xml-file-list source-sf-dir)
+      (make-directory dest-sf-dir t)
+      ;; copy, then intelligently modify the toplevel proxy bundle definition file
+      (let ((new-xml-file-name (edge--join-path-elements dest-sf-dir (concat sf-name ".xml"))))
+        (copy-file (car xml-file-list) new-xml-file-name nil t t nil)
+        (with-current-buffer (find-file-noselect new-xml-file-name)
+          (let*
+              ((root (xml-parse-region (point-min) (point-max)))
+               (sfbundle-elt (car root))
+               (sfbundle-elt-attrs (xml-node-attributes sfbundle-elt))
+               (display-name-elt (car (xml-get-children sfbundle-elt 'DisplayName))))
+            (setcdr (assq 'name sfbundle-elt-attrs) sf-name)
+            (setcar (cddr display-name-elt) sf-name)
+            (funcall serialize-xml-elt root))
+          (save-buffer))))
+    (edge--copy-subdirs (list "sharedflows" "policies") source-sf-dir dest-sf-dir)))
+
+(defun edge--new-asset-from-template (asset-type asset-name template-alist template-name containing-dir)
+  "Non-interactive function to create a new asset from a template.
+ASSET-TYPE - either \"proxy\" or \"sharedflow\".
+ASSET-NAME - name of the to-be-created asset.
+TEMPLATE-ALIST - the alist of templates.
+TEMPLATE-NAME - the name of the asset template, as stored in the templates/<asset-type> directory.
+CONTAINING-DIR - name of an existing directory into which to insert the new asset.
 "
   (if (not (edge--is-existing-directory containing-dir))
     (error
-     (message "[apigee-edge] containing-dir does not exist in `edge-new-proxy-from-template'")))
-  (let ((template-match (assoc template-name edge--proxy-template-alist))
-        (new-proxy-dir (edge--join-path-elements containing-dir proxy-name)))
-    (if (edge--is-existing-directory new-proxy-dir)
+     (message "[apigee-edge] containing-dir does not exist in `edge--new-asset-from-template'")))
+  (let ((template-match (assoc template-name template-alist))
+        (new-dir (edge--join-path-elements containing-dir asset-name)))
+    (if (edge--is-existing-directory new-dir)
         (error
-         (message "[apigee-edge] new-proxy-dir already exists in `edge-new-proxy-from-template'")))
+         (message "[apigee-edge] new-dir already exists in `edge--new-asset-from-template'")))
     (if (not template-match)
         (error
-         (message "[apigee-edge] unknown proxy template in `edge-new-proxy-from-template'")))
-    (let ((template-dir (cadr template-match)))
-      (edge--copy-proxy-template-files proxy-name template-dir new-proxy-dir))
-    (find-file-existing new-proxy-dir)))
+         (message "[apigee-edge] unknown template in `edge--new-asset-from-template'")))
+    (let ((template-dir (cadr template-match))
+          (copy-fn (intern (format "edge--copy-%s-template-files" asset-type))))
+      (funcall copy-fn asset-name template-dir new-dir))
+    (find-file-existing new-dir)))
+
 
 (defun edge--prompt-for-containing-dir ()
   "prompt user for a containing directory, and return it."
   (let ((homedir (concat (getenv "HOME") "/"))
-        (candidate-list edge--recently-used-apiproxy-homes))
+        (candidate-list edge--recently-used-asset-homes))
     (ido-completing-read
      "containing directory?: "
      (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
@@ -662,25 +713,64 @@ for the proxy.
 When invoked with a prefix, this fn will prompt the user also for
 the name of the directory in which to store the apiproxy.
 
-When invoked without a prefix, it uses the most recent apiproxy home
+When invoked without a prefix, it uses the most recent asset home
 directory. If no directory has ever been used, it prompts for the directory.
 
 "
   (interactive "P")
-  (let ((proxy-name (read-string "proxy name?: " nil nil nil))
-        (proxy-template
-         (ido-completing-read
-          "proxy template: "
-          (mapcar (lambda (x) (car x)) edge--proxy-template-alist)
-          nil nil nil))
-        (proxy-containing-dir
-         (if arg
-             (edge--prompt-for-containing-dir)
-           (or (car edge--recently-used-apiproxy-homes) (edge--prompt-for-containing-dir)))))
-    ;; remember this containing dir if it is new (aka unique)
-    (if (not (member proxy-containing-dir edge--recently-used-apiproxy-homes))
-        (push proxy-containing-dir edge--recently-used-apiproxy-homes))
-    (edge-new-proxy-from-template proxy-name proxy-template proxy-containing-dir)))
+  (edge--new-asset "proxy" arg))
+
+
+(defun edge-new-sharedflow (arg)
+  "Interactive fn that creates a new exploded sharedflow bundle directory
+structure. Prompts for the name of the sharedflow, and the base template
+for the thing.
+
+When invoked with a prefix, this fn will prompt the user also for
+the name of the directory in which to store the sharedflow.
+
+When invoked without a prefix, it uses the most recent asset home
+directory. If no directory has ever been used, it prompts for the directory.
+
+"
+  (interactive "P")
+  (edge--new-asset "sharedflow" arg))
+
+
+(defun edge--new-asset (asset-type prompt-arg)
+  "Internal interactive fn that creates a new exploded asset directory
+structure. Prompts for the name of the asset, and the base template
+for the thing.
+
+When invoked with a prefix, this fn will prompt the user also for
+the name of the directory in which to store the asset.
+
+When invoked without a prefix, it uses the most recent asset home
+directory. If no directory has ever been used, it prompts for the directory.
+
+This fn is not intended to be called directly.
+
+ASSET-TYPE - either \"proxy\" or \"sharedflow\"
+PROMPT-ARG - whether invoked with a prefix
+
+"
+  (interactive "P")
+  (let ((alist-sym (intern (format "edge--%s-template-alist" asset-type))))
+    (let ((asset-name (read-string (format "%s name?: " asset-type) nil nil nil))
+          (template
+           (ido-completing-read
+            (format "%s template: " asset-type)
+            (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
+            nil nil nil))
+          (containing-dir
+           (if prompt-arg
+               (edge--prompt-for-containing-dir)
+             (or (car edge--recently-used-asset-homes) (edge--prompt-for-containing-dir)))))
+      ;; remember this containing dir if it is new (aka unique)
+      (if (not (member containing-dir edge--recently-used-asset-homes))
+          (push containing-dir edge--recently-used-asset-homes))
+      (edge--new-asset-from-template asset-type asset-name (symbol-value alist-sym) template containing-dir))))
+
 
 
 ;; restore last known state, and set a timer to persist state periodically

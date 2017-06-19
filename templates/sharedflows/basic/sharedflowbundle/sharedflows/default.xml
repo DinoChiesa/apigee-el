@@ -1,0 +1,10 @@
+<SharedFlow name="default">
+  <Step>
+    <Name>RF-MissingAuthzHeader</Name>
+    <Condition>request.header.authorization = null</Condition>
+  </Step>
+  <Step>
+    <Name>RF-InvalidContentType</Name>
+    <Condition>Not (request.header.content-type =| "application/json")</Condition>
+  </Step>
+</SharedFlow>

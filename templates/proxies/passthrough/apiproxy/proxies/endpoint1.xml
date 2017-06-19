@@ -1,14 +1,29 @@
-<ProxyEndpoint name="default">
-  <Description/>
+<ProxyEndpoint name="endpoint1">
+
+  <HTTPProxyConnection>
+    <BasePath>/will-be-replaced</BasePath>
+    <Properties/>
+    <VirtualHost>secure</VirtualHost>
+  </HTTPProxyConnection>
+
   <FaultRules/>
+
   <PreFlow name="PreFlow">
     <Request/>
     <Response/>
   </PreFlow>
+
   <PostFlow name="PostFlow">
     <Request/>
     <Response/>
   </PostFlow>
+
+  <PostClientFlow name="PostFlow">
+    <Request/>
+    <Response>
+    </Response>
+  </PostClientFlow>
+
   <Flows>
     <Flow name='t1'>
       <Request>
@@ -35,12 +50,9 @@
       <Condition>proxy.pathsuffix MatchesPath "/t2" and request.verb = "POST"</Condition>
     </Flow>
   </Flows>
-  <HTTPProxyConnection>
-    <BasePath>/deepak-2</BasePath>
-    <Properties/>
-    <VirtualHost>secure</VirtualHost>
-  </HTTPProxyConnection>
+
   <RouteRule name="default">
-    <TargetEndpoint>default</TargetEndpoint>
+    <TargetEndpoint>echo</TargetEndpoint>
   </RouteRule>
+
 </ProxyEndpoint>

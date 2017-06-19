@@ -1,0 +1,17 @@
+<RaiseFault name="RF-InvalidContentType">
+    <Description>Invalid Content Type</Description>
+    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+    <FaultResponse>
+        <Set>
+    <Payload contentType="application/json">{
+  "error" :  {
+    "code" : 10015,
+    "message" : "Content-Type not supported."
+  }
+}
+</Payload>
+            <StatusCode>415</StatusCode>
+            <ReasonPhrase>Unsupported Media Type</ReasonPhrase>
+        </Set>
+    </FaultResponse>
+</RaiseFault>

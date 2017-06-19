@@ -1,0 +1,14 @@
+<SharedFlowBundle revision="1" name="basic">
+  <ConfigurationVersion minorVersion='0' majorVersion='4'/>
+  <CreatedAt>1433453156684</CreatedAt>
+  <CreatedBy>dchiesa@google.com</CreatedBy>
+  <Description></Description>
+  <DisplayName>basic</DisplayName>
+  <LastModifiedAt>1486155766526</LastModifiedAt>
+  <LastModifiedBy>dchiesa@google.com</LastModifiedBy>
+  <subType>SharedFlow</subType>
+  <Policies/>
+    <SharedFlows>
+        <SharedFlow>default</SharedFlow>
+    </SharedFlows>
+</SharedFlowBundle>

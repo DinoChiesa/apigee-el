@@ -1,5 +1,5 @@
-<ProxyEndpoint name='default'>
-  <Description>Default Proxy</Description>
+<ProxyEndpoint name='endpoint1'>
+  <Description>Proxy Endpoint 1</Description>
   <HTTPProxyConnection>
     <BasePath>/loopback</BasePath>
     <Properties/>
