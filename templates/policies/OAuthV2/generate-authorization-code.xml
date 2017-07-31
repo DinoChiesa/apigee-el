@@ -1,0 +1,39 @@
+<OAuthV2 name='##'>
+    <Operation>GenerateAuthorizationCode</Operation>
+    <!--
+    ExpiresIn, in milliseconds. The ref is optional. The explicitly specified
+    value is the default, when the variable reference cannot be resolved.
+      2400000 = 40 minutes
+      3600000 = 60 minutes
+    -->
+    <ExpiresIn ref='flow.variable'>2400000</ExpiresIn>
+
+    <!-- The following are Optional -->
+    <ResponseType>flow.variable</ResponseType>
+    <ClientId>flow.variable</ClientId>
+    <RedirectUri>flow.variable</RedirectUri>
+    <Code>flow.variable</Code>
+    <Scope>flow.variable</Scope>
+    <State>flow.variable</State>
+
+    <!--
+    Optional: these attributes get associated to the code+token.
+    They will be available to the api proxy whenever the token is
+    subsequently validated.
+    -->
+    <Attributes>
+      <!-- If set to false, the attribute wont be delivered in the auth code response. -->
+      <Attribute name='attr_name1' ref='flow.variable1' display='true|false'>value1</Attribute>
+      <Attribute name='attr_name2' ref='flow.variable2' display='true|false'>value2</Attribute>
+    </Attributes>
+
+    <!--
+      With <GenerateResponse enabled='true'/>, a response will be generated and returned.
+      With enabled='false', then these flow variables are set on success:
+        oauthv2authcode.<PolicyName>.code
+        oauthv2authcode.<PolicyName>.redirect_uri
+        oauthv2authcode.<PolicyName>.scope
+        oauthv2authcode.<PolicyName>.client_id
+    -->
+    <GenerateResponse enabled='true'/>
+</OAuthV2>

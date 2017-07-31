@@ -1,0 +1,36 @@
+<OAuthV2 enabled='true' name='##'>
+    <DisplayName>OAuthV2 - RefreshAccessToken</DisplayName>
+    <Operation>RefreshAccessToken</Operation>
+    <Attributes/> <!-- not sure if valid here -->
+    <!--
+    client_id and client_secret are expected in the Authorization Header
+    passed as Basic Auth (concatenated with colon, then base64 encoded).
+    -->
+
+    <!--
+    ExpiresIn, in milliseconds. The ref is optional. The explicitly specified
+    value is the default, when the variable reference cannot be resolved.
+      2400000 = 40 minutes
+      3600000 = 60 minutes
+    -->
+    <ExpiresIn ref='flow.variable'>3600000</ExpiresIn>
+
+    <ExternalAuthorization>false</ExternalAuthorization>
+    <GrantType>request.formparam.grant_type</GrantType> <!-- must be \"refresh_token\" -->
+    <RefreshToken>request.formparam.refresh_token</RefreshToken>
+    <SupportedGrantTypes/>
+
+    <GenerateResponse/>
+
+    <!--
+    NB: If <GenerateResponse/> is omitted, then the policy implicitly sets
+    the following variables:
+      oauthv2accesstoken.<PolicyName>.access_token
+      oauthv2accesstoken.<PolicyName>.token_type
+      oauthv2accesstoken.<PolicyName>.expires_in
+      oauthv2accesstoken.<PolicyName>.refresh_token
+      oauthv2accesstoken.<PolicyName>.refresh_token_expires_in
+      oauthv2accesstoken.<PolicyName>.refresh_token_issued_at
+      oauthv2accesstoken.<PolicyName>.refresh_token_status
+    -->
+</OAuthV2>

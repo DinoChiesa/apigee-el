@@ -1,0 +1,7 @@
+<OAuthV2 name='##'>
+    <Operation>InvalidateToken</Operation> <!-- aka \"Revoke\" token -->
+    <Tokens>
+        <Token type='${1:$$(yas-choose-value (list "accesstoken" "refreshtoken"))}'
+          cascade='${2:$$(yas-choose-value (list ("true" "false"))}'>${3:flow.variable}</Token>
+    </Tokens>
+</OAuthV2>

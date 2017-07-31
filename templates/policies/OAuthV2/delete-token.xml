@@ -1,0 +1,5 @@
+<DeleteOAuthV2Info name='##'>
+    <!-- keep one of the following -->
+    <AccessToken ref='access_token.flow.variable'/>
+    <AccessToken>{access_token}</AccessToken>
+</DeleteOAuthV2Info>

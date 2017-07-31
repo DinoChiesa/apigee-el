@@ -1,0 +1,24 @@
+<OAuthV2 name='##'>
+    <DisplayName>##</DisplayName>
+    <Operation>VerifyAccessToken</Operation>
+    <!-- by default, pulls token from Authorization header as per OAuthV2.0 spec -->
+    <AccessToken>flow.variable</AccessToken> <!-- Optional -->
+    <AccessTokenPrefix>Bearer</AccessTokenPrefix> <!-- Optional -->
+    <!--
+    This policy sets the following flow variables:
+      organization_name
+      developer.id
+      developer.app.name
+      client_id
+      grant_type
+      token_type
+      access_token
+      accesstoken.{custom_attribute}
+      issued_at
+      expires_in
+      status
+      scope
+      apiproduct.name*
+      apiproduct.<custom_attribute_name>*
+    -->
+</OAuthV2>
