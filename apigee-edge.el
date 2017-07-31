@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-June-19 11:56:45>
+;; Last-saved : <2017-July-19 15:49:56>
 ;;
 ;;; Commentary:
 ;;
@@ -578,13 +578,32 @@ appropriate.
               (message "yank to add the step declaration...")
               )))))))
 
+
+(defun edge--cleanup-newlines ()
+  "collapse multiple newlines"
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "\\(\n\s*\\)\\([\s]*\n\\)+" (point-max) t)
+      (replace-match (match-string 1)))))
+
+(defun edge--cleanup-quotes ()
+  "replace escaped quote with quote character"
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "\\([ =]\\)&quot;" (point-max) t)
+      (replace-match (concat (match-string 1) "\"")))
+    (goto-char (point-min))
+    (while (re-search-forward "&quot;\\([ <]\\)" (point-max) t)
+      (replace-match (concat "\"" (match-string 1))))))
+
+
 (defun edge--serialize-xml-elt (elt)
   "Serialize an XML element into the current buffer, and then collapse newlines."
   (erase-buffer)
   (xml-print elt)
-  (goto-char (point-min))
-  (while (re-search-forward "\n\\([\s]*\n\\)+" (point-max) t)
-    (replace-match "\n")))
+  (edge--cleanup-newlines)
+  (edge--cleanup-quotes))
+
 
 (defun edge--verify-exactly-one (xml-file-list source-dir)
   "verifies that there is exactly one xml file."
@@ -644,7 +663,8 @@ changing names and replacing / expanding things as appropriate."
                  (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
                  (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
               (setcar (cddr basepath-elt) (concat "/" proxy-name))
-              (edge--serialize-xml-elt root))
+              (edge--serialize-xml-elt root)
+              (edge--cleanup-quotes))
             (save-buffer 0))))
     ))
 
