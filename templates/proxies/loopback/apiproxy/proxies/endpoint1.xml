@@ -25,7 +25,16 @@
       </Response>
   </PostClientFlow>
 
-  <Flows/>
+  <Flows>
+
+    <Flow name='unknown request'>
+      <Request>
+        <Step><Name>RF-UnknownRequest</Name></Step>
+      </Request>
+      <Response/>
+    </Flow>
+
+  </Flows>
 
   <RouteRule name='NoRouteRule'/>
 

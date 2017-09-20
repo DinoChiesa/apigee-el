@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-July-19 15:49:56>
+;; Last-saved : <2017-September-20 11:56:13>
 ;;
 ;;; Commentary:
 ;;
@@ -554,7 +554,7 @@ appropriate.
               ;; yas-expand-snippet-sync does not return until the snip is expanded.
               (yas-expand-snippet-sync elaborated-template (point) (point))
               (save-buffer)
-              (apigee-mode 1)
+              ;;(apigee-mode 1)
               ;; here, optionally open the resource file, if any
               (cond
                ((or (string= ptype "Javascript") (string= ptype "XSL") (string= ptype "Python"))
@@ -569,8 +569,9 @@ appropriate.
                               (and (not (file-exists-p resource-dir))
                                    (make-directory resource-dir))
                               (find-file-other-window (concat resource-dir resource-basename))
-                              (apigee--maybe-insert-base-content resource-basename resource-type)
-                              (apigee-mode 1)))))))
+                              ;;(apigee--maybe-insert-base-content resource-basename resource-type)
+                              ;;(apigee-mode 1)
+                              ))))))
                (t nil))
               (kill-new policy-name)
               (kill-new
