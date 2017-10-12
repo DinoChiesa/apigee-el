@@ -9,17 +9,21 @@
   <FaultRules/>
 
   <PreFlow name='PreFlow'>
-      <Request/>
-      <Response/>
+    <Request>
+    </Request>
+    <Response>
+    </Response>
   </PreFlow>
   <PostFlow name='PostFlow'>
-      <Request/>
+      <Request>
+      </Request>
       <Response>
         <Step><Name>AM-CleanResponseHeaders</Name></Step>
       </Response>
   </PostFlow>
   <PostClientFlow name='PostFlow'>
-      <Request/>
+    <Request>
+    </Request>
       <Response>
         <!-- insert message logging policies here -->
       </Response>
@@ -31,7 +35,8 @@
       <Request>
         <Step><Name>RF-UnknownRequest</Name></Step>
       </Request>
-      <Response/>
+      <Response>
+      </Response>
     </Flow>
 
   </Flows>

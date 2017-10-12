@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-September-20 11:56:13>
+;; Last-saved : <2017-October-12 12:56:26>
 ;;
 ;;; Commentary:
 ;;
@@ -603,7 +603,10 @@ appropriate.
   (erase-buffer)
   (xml-print elt)
   (edge--cleanup-newlines)
-  (edge--cleanup-quotes))
+  (edge--cleanup-quotes)
+  (save-excursion
+    (indent-region (point-min) (point-max)))
+  )
 
 
 (defun edge--verify-exactly-one (xml-file-list source-dir)
