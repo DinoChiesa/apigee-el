@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-October-12 12:56:26>
+;; Last-saved : <2017-October-13 10:32:36>
 ;;
 ;;; Commentary:
 ;;
@@ -584,7 +584,7 @@ appropriate.
   "collapse multiple newlines"
   (save-excursion
     (goto-char (point-min))
-    (while (re-search-forward "\\(\n\s*\\)\\([\s]*\n\\)+" (point-max) t)
+    (while (re-search-forward "\\(\n\s*\\)\\([\s]*\n\\)" (point-max) t)
       (replace-match (match-string 1)))))
 
 (defun edge--cleanup-quotes ()
