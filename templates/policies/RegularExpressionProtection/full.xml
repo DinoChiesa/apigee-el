@@ -1,0 +1,42 @@
+<RegularExpressionProtection name="##">
+  <Source>request</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <URIPath>
+    <Pattern>REGEX PATTERN</Pattern>
+    <Pattern>REGEX PATTERN</Pattern>
+  </URIPath>
+  <QueryParam name="a-query-param">
+    <Pattern>REGEX PATTERN</Pattern>
+    <Pattern>REGEX PATTERN</Pattern>
+  </QueryParam>
+  <Header name="a-header">
+    <Pattern>REGEX PATTERN</Pattern>
+    <Pattern>REGEX PATTERN</Pattern>
+  </Header>
+  <FormParam name="a-form-param">
+    <Pattern>REGEX PATTERN</Pattern>
+    <Pattern>REGEX PATTERN</Pattern>
+  </FormParam>
+  <Variable name="request.content">
+    <Pattern>REGEX PATTERN</Pattern>
+    <Pattern>REGEX PATTERN</Pattern>
+  </Variable>
+  <XMLPayload>
+    <Namespaces>
+      <Namespace prefix="apigee">http://www.apigee.com</Namespace>
+    </Namespaces>
+    <XPath>
+      <Expression>/apigee:Greeting/apigee:User</Expression>
+      <Type>string</Type>
+      <Pattern>REGEX PATTERN</Pattern>
+      <Pattern>REGEX PATTERN</Pattern>
+    </XPath>
+  </XMLPayload>
+  <JSONPayload>
+    <JSONPath>
+      <Expression>$.store.book[*].author</Expression>
+      <Pattern>REGEX PATTERN</Pattern>
+      <Pattern>REGEX PATTERN</Pattern>
+    </JSONPath>
+  </JSONPayload>
+</RegularExpressionProtection>

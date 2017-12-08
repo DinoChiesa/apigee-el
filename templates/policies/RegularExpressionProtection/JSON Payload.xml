@@ -1,0 +1,11 @@
+<RegularExpressionProtection name="##">
+  <Source>request</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <JSONPayload>
+    <JSONPath>
+      <Expression>$.store.book[*].author</Expression>
+      <Pattern>REGEX PATTERN</Pattern>
+      <Pattern>REGEX PATTERN</Pattern>
+    </JSONPath>
+  </JSONPayload>
+</RegularExpressionProtection>

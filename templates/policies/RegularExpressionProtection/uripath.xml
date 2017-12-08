@@ -1,0 +1,7 @@
+<RegularExpressionProtection name="##">
+     <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+     <URIPath>
+         <Pattern>REGEX PATTERN</Pattern>
+         <Pattern>REGEX PATTERN</Pattern>
+     </URIPath>
+</RegularExpressionProtection>

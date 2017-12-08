@@ -1,0 +1,16 @@
+<ExtractVariables name='##'>
+  <Source>AccessEntity.AE-${1:1}</Source>
+  <VariablePrefix>entity</VariablePrefix>
+  <XMLPayload>
+    <Variable name='extracted_app_display_name' type='string'>
+      <XPath>/App/Attributes/Attribute[Name='DisplayName']/Value/text()</XPath>
+    </Variable>
+    <Variable name='extracted_consumer_secret' type='string'>
+      <!-- not sure this will actually work - is the XPath a MessageTemplate ?  -->
+      <XPath>/App/Credentials/Credential[ConsumerKey='{client_id}']/ConsumerSecret/text()</XPath>
+    </Variable>
+    <Variable name='${2:varname2}' type='string'>
+      <XPath>/App/Attributes/Attribute[Name='$3']/Value/text()</XPath>
+    </Variable>
+  </XMLPayload>
+</ExtractVariables>

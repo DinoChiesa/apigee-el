@@ -1,0 +1,14 @@
+<XSL name='##'>
+  <DisplayName>##</DisplayName>
+  <Source>outboundMessageTemplate</Source>
+  <OutputVariable>transformedContent</OutputVariable>
+  <ResourceURL>xsl://1.xsl</ResourceURL>
+  <!--
+      Parameters are optional. reference them in the XSL as:
+      <xsl:param name="pwd" select="''"/>
+      <xsl:param name="converted" select="''"/>
+  -->
+  <Parameters ignoreUnresolvedVariables='true'>
+    <Parameter name='additional' ref='additional'/>
+  </Parameters>
+</XSL>

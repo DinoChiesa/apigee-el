@@ -12,24 +12,33 @@
     <Request>
     </Request>
     <Response>
+      <Step><Name>AM-CleanResponseHeaders</Name></Step>
     </Response>
   </PreFlow>
   <PostFlow name='PostFlow'>
-      <Request>
-      </Request>
-      <Response>
-        <Step><Name>AM-CleanResponseHeaders</Name></Step>
-      </Response>
+    <Request>
+    </Request>
+    <Response>
+    </Response>
   </PostFlow>
   <PostClientFlow name='PostFlow'>
     <Request>
     </Request>
-      <Response>
-        <!-- insert message logging policies here -->
-      </Response>
+    <Response>
+      <!-- insert message logging policies here -->
+    </Response>
   </PostClientFlow>
 
   <Flows>
+
+    <Flow name="flow1">
+      <Request>
+      </Request>
+      <Response>
+        <Step><Name>AM-Response</Name></Step>
+      </Response>
+      <Condition>(proxy.pathsuffix MatchesPath "/t1") and (request.verb = "GET")</Condition>
+    </Flow>
 
     <Flow name='unknown request'>
       <Request>

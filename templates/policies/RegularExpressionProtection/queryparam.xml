@@ -1,0 +1,8 @@
+<RegularExpressionProtection name="##">
+     <Source>request</Source>
+     <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+     <QueryParam name="a-query-param">
+         <Pattern>REGEX PATTERN</Pattern>
+         <Pattern>REGEX PATTERN</Pattern>
+     </QueryParam>
+</RegularExpressionProtection>

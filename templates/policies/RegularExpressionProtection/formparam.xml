@@ -1,0 +1,8 @@
+<RegularExpressionProtection name="##">
+  <Source>request</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <FormParam name="a-form-param">
+    <Pattern>REGEX PATTERN</Pattern>
+    <Pattern>REGEX PATTERN</Pattern>
+  </FormParam>
+</RegularExpressionProtection>

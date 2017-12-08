@@ -1,0 +1,24 @@
+<APIProxy name="hosted-function">
+    <ConfigurationVersion majorVersion="4" minorVersion="0"/>
+    <CreatedAt>1508339504744</CreatedAt>
+    <CreatedBy>jwhitlock@apigee.com</CreatedBy>
+    <Description>This is a HF proxy.</Description>
+    <DisplayName>will-be-replaced</DisplayName>
+    <LastModifiedAt>1508341043050</LastModifiedAt>
+    <LastModifiedBy>jwhitlock@apigee.com</LastModifiedBy>
+    <Policies/>
+    <ProxyEndpoints>
+        <ProxyEndpoint>default</ProxyEndpoint>
+    </ProxyEndpoints>
+    <Resources>
+        <Resource>hosted://app.yaml</Resource>
+        <Resource>hosted://index.js</Resource>
+        <Resource>hosted://package.json</Resource>
+    </Resources>
+    <Spec></Spec>
+    <TargetServers/>
+    <TargetEndpoints>
+        <TargetEndpoint>default</TargetEndpoint>
+    </TargetEndpoints>
+    <validate>false</validate>
+</APIProxy>

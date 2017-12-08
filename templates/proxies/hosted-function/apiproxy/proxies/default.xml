@@ -3,25 +3,16 @@
     <Description/>
     <FaultRules/>
     <PreFlow name="PreFlow">
-        <Request>
-          <Step>
-            <Name>Verify-API-Key-1</Name>
-          </Step>
-          <Step>
-            <Name>Quota-1</Name>
-          </Step>
-        </Request>
+        <Request/>
         <Response/>
     </PreFlow>
     <PostFlow name="PostFlow">
-      <Request>
-      </Request>
-      <Response>
-      </Response>
+        <Request/>
+        <Response/>
     </PostFlow>
     <Flows/>
     <HTTPProxyConnection>
-        <BasePath>/v1/sp_reverse_proxy</BasePath>
+        <BasePath>/will-be-replaced-hf</BasePath>
         <Properties/>
         <VirtualHost>secure</VirtualHost>
     </HTTPProxyConnection>

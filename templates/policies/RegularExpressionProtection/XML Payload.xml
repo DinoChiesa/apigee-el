@@ -1,0 +1,15 @@
+<RegularExpressionProtection name="##">
+  <Source>request</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <XMLPayload>
+    <Namespaces>
+      <Namespace prefix="apigee">http://www.apigee.com</Namespace>
+    </Namespaces>
+    <XPath>
+      <Expression>/apigee:Greeting/apigee:User</Expression>
+      <Type>string</Type>
+      <Pattern>REGEX PATTERN</Pattern>
+      <Pattern>REGEX PATTERN</Pattern>
+    </XPath>
+  </XMLPayload>
+</RegularExpressionProtection>

@@ -1,0 +1,8 @@
+<RegularExpressionProtection name="##">
+     <Source>request</Source>
+     <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+     <Header name="a-header">
+         <Pattern>REGEX PATTERN</Pattern>
+         <Pattern>REGEX PATTERN</Pattern>
+     </Header>
+</RegularExpressionProtection>
