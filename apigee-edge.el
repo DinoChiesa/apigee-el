@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-October-13 10:32:36>
+;; Last-saved : <2017-November-16 17:59:54>
 ;;
 ;;; Commentary:
 ;;
@@ -146,6 +146,9 @@
 (defvar edge--proxy-template-alist nil
   "An alist, relating a name to a proxy template. The cadr of each entry is a string, a directory name, containing the exploded proxy template.")
 
+(defvar edge--target-template-alist nil
+  "An alist, relating a name to a target template. The cadr of each entry is a string, a file name, containing the target template.")
+
 (defvar edge--sharedflow-template-alist nil
   "An alist, relating a name to a template for a sharedflow. The cadr of each entry is a string, a directory name, containing the exploded sharedflow template.")
 
@@ -242,8 +245,18 @@ lexicographically by the car of each element, which is a string."
   (sort list-o-lists
         (lambda (a b) (string< (car a) (car b) ))))
 
-(defun edge--get-template-contents (ptype template-filename)
-  "return the contents of the policy template file"
+(defun edge--get-target-template-contents (template-filename)
+  "return the contents of the target template file.
+"
+  (let ((filename
+         (edge--join-path-elements edge--base-template-dir "targets" template-filename)))
+    (with-temp-buffer
+      (insert-file-contents filename)
+      (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defun edge--get-policy-template-contents (template-filename)
+  "return the contents of the policy template file.
+"
   (let ((filename
          (edge--join-path-elements edge--base-template-dir "policies" template-filename)))
     (with-temp-buffer
@@ -260,7 +273,7 @@ populate the menu of available policy templates."
     (list (file-name-nondirectory policy-type-directory)
           (edge--sort-strings templ-list))))
 
-(defun edge--template-count ()
+(defun edge--policy-template-count ()
   "returns the total number of policy templates available in
 `edge--policy-template-alist'"
   (apply '+
@@ -306,7 +319,28 @@ the name of the template in the resulting menu.
              template-list)
             (and edge--verbose-logging (message "policy type %s" policy-type)))
           (reverse (edge--sort-by-string-car template-list))))
-    (list "policy" (edge--template-count) top-level-dir)))
+    (list "policy" (edge--policy-template-count) top-level-dir)))
+
+
+(defun edge-load-target-templates ()
+  "Load target templates from the target template dir.
+
+Each child under the template directory should be a .xml file defining a target.
+The name of the file will be the name of the template in the resulting menu.
+"
+  (let ((top-level-dir (edge--join-path-elements edge--base-template-dir "targets" )))
+    (setq edge--target-template-alist
+         (let (template-list)
+           (dolist (template-fname (edge--proper-files top-level-dir ".xml"))
+             (push
+              (list (edge--trim-xml-suffix (file-name-nondirectory template-fname)) template-fname)
+              template-list)
+             (and edge--verbose-logging (message "target template %s" template-fname)))
+           (let ((v (length template-list)))
+             (message "length of list %d" v))
+           (reverse (edge--sort-by-string-car template-list))))
+    (list "target" (length edge--target-template-alist) top-level-dir)))
+
 
 (defun edge-load-templates (top-level-dir &optional interactive)
   "Load templates for proxies and policies from the top level directory TOP-LEVEL-DIR.
@@ -324,6 +358,7 @@ Within each of those, there will be templates for those entities.
   (setq edge--base-template-dir top-level-dir)
   (let ((results (list (edge-load-proxy-templates)
                        (edge-load-policy-templates)
+                       (edge-load-target-templates)
                        (edge-load-sharedflow-templates)
                        )))
     (when interactive
@@ -334,7 +369,7 @@ Within each of those, there will be templates for those entities.
                 ", ")
                top-level-dir))))
 
-(defun edge--trim-suffix (s)
+(defun edge--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
   (s-chop-suffix ".xml" s))
 
@@ -347,10 +382,81 @@ Within each of those, there will be templates for those entities.
               (selected-window)))
     t))
 
-(defun edge--generate-policy-menu (candidates)
+
+(defun edge--target-name-is-available (tname)
+  "is a target by this name available? Eg, does a file NOT exist with this name?"
+  (let ((filename-to-check
+         (concat (edge--path-of-apiproxy) "apiproxy/targets/" tname ".xml")))
+    (not (file-exists-p filename-to-check))))
+
+
+(defun edge--suggested-target-name (template-name)
+  "suggest a name for a target given a TEMPLATE-NAME for the target.
+Based on file availability."
+  (let ((val 1)
+        (next-name (lambda (v) (concat template-name "-" (format "%d" v)))))
+      (let ((tname (funcall next-name val)))
+        (while (not (edge--target-name-is-available tname))
+          (setq val (1+ val)
+                tname (funcall next-name val)))
+        tname)))
+
+
+
+;;;###autoload
+(defun edge-add-target ()
+  "Invoke this interactively, and the fn will prompt the user to
+choose a target type to insert.
+"
+  (interactive)
+  (let ((apiproxy-dir (edge--path-of-apiproxy))
+        (template-name
+           (ido-completing-read
+            (format "%s template: " asset-type)
+            (mapcar (lambda (x) (car x)) edge--target-template-alist)
+            nil nil nil)))
+    (when template-name
+      (let ((target-dir (concat apiproxy-dir "apiproxy/targets/"))
+            (have-name nil)
+            (target-name-prompt "target name: ")
+            (choice (assoc template-name edge--target-template-alist)))
+        (let* ((template-filename (nth 1 choice))
+              (raw-template (edge--get-target-template-contents template-filename)))
+          (and (not (file-exists-p target-dir))
+               (make-directory target-dir))
+
+          ;;(asset-name (read-string (format "%s name?: " asset-type) default-value nil default-value)))
+
+            (let ((default-value (edge--suggested-target-name template-name))
+                  (target-name
+                   (let (n)
+                     (while (not have-name)
+                       (setq n (read-string target-name-prompt default-value nil default-value)
+                             have-name (edge--target-name-is-available n)
+                             policy-name-prompt "That name is in use. Target name: " ))
+                      n))
+                   (elaborated-template
+                    (progn
+                      (while (string-match "##" raw-template)
+                        (setq raw-template (replace-match policy-name t t raw-template)))
+                      raw-template)))
+
+              ;; create the file, expand the snippet, save it.
+              (find-file (concat target-dir target-name ".xml"))
+              ;; yas-expand-snippet-sync does not return until the snip is expanded.
+              (yas-expand-snippet-sync elaborated-template (point) (point))
+              (save-buffer)
+              ;; here, optionally open the resource file, if any
+              (kill-new
+               (concat "<RouteRule name='foo'><Target>" target-name "</Target></RouteRule>"))
+              (message "yank to add the RouteRule declaration...")
+              ))))))
+
+
+(defun edge--generate-policy-menu ()
   "From the list of candidates, generate a keymap suitable for
 use as a menu in `popup-menu' . Each item in the input list of
-CANDIDATES is a list, (POLICY-TYPE (TEMPLATE TEMPLATE...)), where
+candidates is a list, (POLICY-TYPE (TEMPLATE TEMPLATE...)), where
 POLICY-TYPE is one of {Quota, XMLToJSON, Javascript, etc}, and TEMPLATE
 is the name of the file containing a template to fill in for a
 new policy. Like this:
@@ -391,25 +497,27 @@ The intention is to provide input to `popup-menu', to display a cascading,
 multi-level popup menu.
 
 "
-  (let ((keymap (make-sparse-keymap "Insert a policy..."))
-        (n 0) ;; need for cons cell
-        (j 0)
-        (len (length candidates))
-        (sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
+  (let ((candidates edge--policy-template-alist))
+    (let ((keymap (make-sparse-keymap "Insert a policy..."))
+          (n 0) ;; need for cons cell
+          (j 0)
+          (len (length candidates))
+          (sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
 
-    (while (< j len)
-      (let* ((template-set (nth j candidates))
-             (cat (car template-set))
-             (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
+      (while (< j len)
+        (let* ((template-set (nth j candidates))
+               (cat (car template-set))
+               (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
           (define-key keymap (vector (intern cat)) (cons cat (make-sparse-keymap cat)))
           (dolist (template templates)
             (define-key keymap
               (vector (intern cat) (edge--join-path-elements cat template))
-              (cons (edge--trim-suffix template) n))
+              (cons (edge--trim-xml-suffix template) n))
             ))
 
-      (setq j (1+ j)))
-    keymap))
+        (setq j (1+ j)))
+      keymap)))
+
 
 (defun edge--prompt-user-with-policy-choices ()
   "Prompt the user with the available choices.
@@ -425,7 +533,7 @@ of available policies.
     ;; of the frame, which makes for an annoying
     ;; user-experience.
     (x-popup-menu (edge--get-menu-position)
-                  (edge--generate-policy-menu edge--policy-template-alist)))
+                  (edge--generate-policy-menu)))
 
 (defun edge--is-existing-directory (dir-name)
   "Tests to see whether a name refers to an existing directory."
@@ -533,7 +641,7 @@ appropriate.
                 (policy-name-prompt "policy name: "))
             (and (not (file-exists-p policy-dir))
                  (make-directory policy-dir))
-            (let* ((raw-template (edge--get-template-contents ptype template-filename))
+            (let* ((raw-template (edge--get-policy-template-contents template-filename))
                    (default-value (edge--suggested-policy-name ptype))
                    (policy-name
                     (let (n)
