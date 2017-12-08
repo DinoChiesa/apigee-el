@@ -1,8 +1,8 @@
 # apigee-edge-el
 
-Module for interacting with Apigee Edge, and for creating and modifying Apigee Edge assets.
+Emacs elisp module for interacting with Apigee Edge, and for creating and modifying Apigee Edge assets.
 
-## Using
+## Using it
 
 Apigee Edge is an API platform that allows you to configure smart HTTP proxies for your APIs.  Within the proxies you can configure Apigee to do things like :
  - verify an inbound API key
@@ -14,7 +14,7 @@ Apigee Edge is an API platform that allows you to configure smart HTTP proxies f
  - modify the verb
  - and many other things.
 
-This module is an emacs-lisp module that adds capabilities to emacs to make it easier to create API proxies within the editor. Apigee Edge includes a User Interface with an interactive, graphical proxy designer. For people who like to work offline, this emacs-lisp module is somewhat similar.
+This module is an emacs-lisp module that adds capabilities to emacs to make it easier to create and edit API proxies within the editor. Apigee Edge includes a User Interface with an interactive, graphical proxy designer. For people who like to work offline, this emacs-lisp module is somewhat similar.
 
 To use this module, put this in your .emacs file:
 
@@ -36,6 +36,10 @@ To specify the directory in which to store the new proxy:
 To add a policy to an existing proxy, open a dired buffer to ../apiproxy and:
 
     M-x edge-add-policy
+
+To add a target to an existing proxy, open a dired buffer to ../apiproxy and:
+
+    M-x edge-add-target
 
 
 ## Adding templates
@@ -61,4 +65,10 @@ Some ideas for extending this module:
 ## License
 
 This material is Copyright 2017 Dino Chiesa and Google Inc.
-and is licensed under the [Apache 2.0 License](LICENSE). This includes the elisp code as well as any API Proxy templates. 
+and is licensed under the [Apache 2.0 License](LICENSE). This includes the elisp code as well as any API Proxy templates.
+
+
+## Disclaimer
+
+This module is not an official Google product, nor is it part of an official Google product.
+
