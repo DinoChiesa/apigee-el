@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-December-08 13:33:27>
+;; Last-saved : <2017-December-18 17:04:48>
 ;;
 ;;; Commentary:
 ;;
@@ -104,7 +104,7 @@
    '("ValidateSAMLAssertion" "SAML")
    '("VerifyApiKey" "VerifyApiKey")
    '("JavaCallout" "Java")
-   '("Javascript" "JS")
+   '("JavaScript" "JS")
    '("ExtractVariables" "EV")
    '("OAuthV2" "OAuth")
    '("XMLToJSON" "XMLToJSON")
@@ -139,6 +139,7 @@
 }
 ")
    '("application/x-www-form-urlencoded" "status=true&clientId={parsedRequest.client_id}")
+   '("text/plain" "ok")
    '("application/xml" "<message><here>{parsedRequest.client_id}</here></message>")))
 
 
@@ -667,7 +668,7 @@ appropriate.
               ;;(apigee-mode 1)
               ;; here, optionally open the resource file, if any
               (cond
-               ((or (string= ptype "Javascript") (string= ptype "XSL") (string= ptype "Python"))
+               ((or (string= ptype "JavaScript") (string= ptype "XSL") (string= ptype "Python"))
                 (save-excursion
                   (goto-char (point-min))
                   (if (re-search-forward "<ResourceURL>\\(jsc\\|xsl\\|py\\)://\\(.+\\)</ResourceURL>" (point-max) t)
@@ -677,7 +678,7 @@ appropriate.
                             (let ((resource-dir
                                    (concat apiproxy-dir "apiproxy/resources/" resource-type "/")))
                               (and (not (file-exists-p resource-dir))
-                                   (make-directory resource-dir))
+                                   (make-directory resource-dir t))
                               (find-file-other-window (concat resource-dir resource-basename))
                               ;;(apigee--maybe-insert-base-content resource-basename resource-type)
                               ;;(apigee-mode 1)
@@ -704,7 +705,7 @@ appropriate.
     (while (re-search-forward "\\([ =]\\)&quot;" (point-max) t)
       (replace-match (concat (match-string 1) "\"")))
     (goto-char (point-min))
-    (while (re-search-forward "&quot;\\([ <]\\)" (point-max) t)
+    (while (re-search-forward "&quot;\\([ <)]\\)" (point-max) t)
       (replace-match (concat "\"" (match-string 1))))))
 
 
