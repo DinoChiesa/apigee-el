@@ -5,8 +5,7 @@
        XSLT, or ExtractVariables. -->
   <Set>
     <Headers>
-      <Header name='Content-Type'>${1:$$(yas-choose-value (list
-      "application/json" "application/xml" "text/plain"))}</Header>
+      <Header name='Content-Type'>${2:$$(yas-choose-value (list "application/json" "application/xml" "text/plain"))}</Header>
     </Headers>
   </Set>
 </AssignMessage>
