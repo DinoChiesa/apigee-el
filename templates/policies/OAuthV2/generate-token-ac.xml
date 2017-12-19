@@ -1,0 +1,18 @@
+ <OAuthV2 name="OAuthV2-GenerateAccessToken-AuthCode">
+  <ExternalAuthorization>false</ExternalAuthorization>
+  <Operation>GenerateAccessToken</Operation>
+  <SupportedGrantTypes>
+    <GrantType>authorization_code</GrantType>
+  </SupportedGrantTypes>
+
+    <!--
+    Optional: these attributes get associated to the token.
+    They will be made available to the api proxy via context variables,
+    when the token is subsequently validated.
+    -->
+    <Attributes>
+      <Attribute name='username' ref='flow.variable1' display='false'/>
+    </Attributes>
+
+  <GenerateResponse />
+</OAuthV2>

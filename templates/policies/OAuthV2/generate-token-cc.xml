@@ -5,5 +5,17 @@
   <SupportedGrantTypes>
     <GrantType>client_credentials</GrantType>
   </SupportedGrantTypes>
+
+    <!--
+    Optional: these attributes get associated to the token.
+    They will be available to the api proxy whenever the token is
+    subsequently validated.
+    -->
+    <Attributes>
+      <!-- If set to false, the attribute wont be delivered in the auth code response. -->
+      <Attribute name='attr_name1' ref='flow.variable1' display='true|false'>value1</Attribute>
+      <Attribute name='attr_name2' ref='flow.variable2' display='true|false'>value2</Attribute>
+    </Attributes>
+
   <GenerateResponse enabled="false"/>
 </OAuthV2>
