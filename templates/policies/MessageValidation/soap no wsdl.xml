@@ -1,0 +1,5 @@
+<MessageValidation name="##">
+   <Source>message</Source> <!-- must be message type -->
+   <SOAPMessage version='${3:$$(yas-choose-value (list "1.1" "1.2" ))}'/>
+   <Element namespace="${4:http://finance.com/1999}">${5:ElementUnderBody}</Element>
+</MessageValidation>

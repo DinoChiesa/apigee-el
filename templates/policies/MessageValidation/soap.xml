@@ -1,0 +1,6 @@
+<MessageValidation name="##">
+   <Source>message</Source> <!-- must be message type -->
+   <ResourceURL>wsdl://${2:example.wsdl}</ResourceURL>
+   <SOAPMessage version='${3:$$(yas-choose-value (list "1.1" "1.2" ))}'/> <!-- optional -->
+   <Element namespace="${4:http://finance.com/1999}">${5:ElementUnderBody}</Element>
+</MessageValidation>

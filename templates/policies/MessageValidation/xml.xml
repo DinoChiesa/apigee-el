@@ -1,0 +1,5 @@
+<MessageValidation name="##">
+  <Source>message</Source> <!-- must be message type -->
+  <!-- no XSD; verify root element only -->
+  <Element namespace="${4:http://finance.com/1999}">${5:ElementUnderBody}</Element>
+</MessageValidation>
