@@ -1,0 +1,3 @@
+<GetOAuthV2Info name='##'>
+  <AccessToken ref="${1:extracted.access_token}"></AccessToken>
+</GetOAuthV2Info>

@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2017-December-18 17:04:48>
+;; Last-saved : <2018-January-17 13:40:58>
 ;;
 ;;; Commentary:
 ;;
@@ -106,12 +106,15 @@
    '("JavaCallout" "Java")
    '("JavaScript" "JS")
    '("ExtractVariables" "EV")
-   '("OAuthV2" "OAuth")
+   '("OAuthV2" "OAuthV2")
    '("XMLToJSON" "XMLToJSON")
+   '("VerifyJWT" "JWT")
+   '("GenerateJWT" "JWT")
+   '("DecodeJWT" "JWT")
    '("JSONToXML" "JSONToXML")
-   '("GetOAuthV2Info" "OAuth")
-   '("SetOAuthV2Info" "OAuth")
-   '("DeleteOAuthV2Info" "OAuth")
+   '("GetOAuthV2Info" "OAuthV2-GetInfo")
+   '("SetOAuthV2Info" "OAuthV2-SetInfo")
+   '("DeleteOAuthV2Info" "OAuthV2-DeleteInfo")
    '("BasicAuthentication" "BA")))
 
 (defconst edge--http-status-message-alist
