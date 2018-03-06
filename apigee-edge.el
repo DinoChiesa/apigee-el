@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2018-February-26 15:04:21>
+;; Last-saved : <2018-March-05 19:11:32>
 ;;
 ;;; Commentary:
 ;;
@@ -61,6 +61,7 @@
 
 (require 's) ;; magnars' long lost string library
 (require 'xml)
+(require 'dash) ;; magnars' functional lib
 
 (defvar edge--base-template-dir nil
   "The directory from which policy templates have been most recently loaded")
@@ -178,6 +179,7 @@
 
 (defun edge--persist-state ()
   "function expected to be called periodically to store the state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
+  (setq edge--recently-used-asset-homes (edge--fresh-recent-asset-homes t))
   (let ((dat-file-path (edge--path-to-settings-file))
         (alist-to-write nil))
     (dolist (setting-name edge--list-of-vars-to-store-and-restore)
@@ -833,11 +835,29 @@ CONTAINING-DIR - name of an existing directory into which to insert the new asse
       (funcall copy-fn asset-name template-dir new-dir))
     (find-file-existing new-dir)))
 
+(defun edge--fresh-recent-asset-homes (with-time)
+  "returns the list of recently used asset homes, eliminating stale entries, in sorted order.
+If WITH-TIME is non-nil, emit the list with time (suitable for persisting). Otherwise without -
+it will be a bare list of strings representing directory paths."
+  (let ((result
+         (let ((days-considered-stale 30))
+           (-sort (lambda (a b)
+                    (> (float-time (time-subtract (apply 'encode-time (cadr a)) (apply 'encode-time (cadr b)))) 0))
+                  (-filter (lambda (x)
+                             (edge--time-is-within-days (apply 'encode-time (cadr x)) days-considered-stale))
+                           edge--recently-used-asset-homes)))))
+    (if with-time result
+      (-map (lambda (n) (car n)) result))))
+
+(defun edge--time-is-within-days (the-time delta-days)
+  "Returns t if THE-TIME is less than DELTA-DAYS ago."
+  (let ((delta-seconds (* 24 delta-days 60 60)))
+    (< (float-time (time-subtract (current-time) the-time)) delta-seconds)))
 
 (defun edge--prompt-for-containing-dir ()
   "prompt user for a containing directory, and return it."
   (let ((homedir (concat (getenv "HOME") "/"))
-        (candidate-list edge--recently-used-asset-homes))
+        (candidate-list (edge--fresh-recent-asset-homes nil)))
     (ido-completing-read
      "containing directory?: "
      (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
@@ -875,6 +895,14 @@ directory. If no directory has ever been used, it prompts for the directory.
   (edge--new-asset "sharedflow" arg))
 
 
+(defun edge--remember-asset-home (containing-dir)
+  "stores one directory with the current time in the list"
+  (setq edge--recently-used-asset-homes
+        (-remove (lambda (x)  (equal (car x) containing-dir)) edge--recently-used-asset-homes))
+  (setq edge--recently-used-asset-homes (cons (list containing-dir (decode-time nil t))
+                                              edge--recently-used-asset-homes)))
+
+
 (defun edge--new-asset (asset-type prompt-arg)
   "Internal interactive fn that creates a new exploded asset directory
 structure. Prompts for the name of the asset, and the base template
@@ -903,16 +931,9 @@ PROMPT-ARG - whether invoked with a prefix
           (containing-dir
            (if prompt-arg
                (edge--prompt-for-containing-dir)
-             (or (car edge--recently-used-asset-homes) (edge--prompt-for-containing-dir)))))
-      ;; remember this containing dir if it is new (aka unique)
-      (if (member containing-dir edge--recently-used-asset-homes)
-          (setq edge--recently-used-asset-homes (delete containing-dir edge--recently-used-asset-homes)))
-
-      ;;(push containing-dir edge--recently-used-asset-homes))
-      (setq edge--recently-used-asset-homes (cons containing-dir edge--recently-used-asset-homes))
-      ;;(message "new list: %s" (prin1-to-string edge--recently-used-asset-homes))
+             (or (car (edge--fresh-recent-asset-homes nil)) (edge--prompt-for-containing-dir)))))
+      (edge--remember-asset-home containing-dir)
       (edge--new-asset-from-template asset-type asset-name (symbol-value alist-sym) template containing-dir))))
-
 
 
 ;; restore last known state, and set a timer to persist state periodically
