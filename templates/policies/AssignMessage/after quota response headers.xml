@@ -1,0 +1,11 @@
+<AssignMessage name="##">
+  <AssignTo createNew="false" type="response"/>
+  <Set>
+    <Headers>
+      <Header name="X-RateLimit-Limit">{ratelimit.QuotaPolicy.allowed.count}</Header>
+      <Header name="X-RateLimit-Used">{ratelimit.QuotaPolicy.used.count}</Header>
+      <Header name="X-RateLimit-Reset">{ratelimit.QuotaPolicy.expiry.time}</Header>
+    </Headers>
+  </Set>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+</AssignMessage>

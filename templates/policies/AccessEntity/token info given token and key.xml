@@ -1,0 +1,5 @@
+<AccessEntity continueOnError="true" name='##'>
+    <EntityType value="requesttoken"/>
+    <EntityIdentifier ref="${1:extracted.access_token}" type="requesttoken"/>
+    <SecondaryIdentifier ref="${2:request.queryparam.clientid}" type="consumerkey"/>
+</AccessEntity>
