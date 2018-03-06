@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2018-January-17 13:40:58>
+;; Last-saved : <2018-February-26 15:04:21>
 ;;
 ;;; Commentary:
 ;;
@@ -905,8 +905,12 @@ PROMPT-ARG - whether invoked with a prefix
                (edge--prompt-for-containing-dir)
              (or (car edge--recently-used-asset-homes) (edge--prompt-for-containing-dir)))))
       ;; remember this containing dir if it is new (aka unique)
-      (if (not (member containing-dir edge--recently-used-asset-homes))
-          (push containing-dir edge--recently-used-asset-homes))
+      (if (member containing-dir edge--recently-used-asset-homes)
+          (setq edge--recently-used-asset-homes (delete containing-dir edge--recently-used-asset-homes)))
+
+      ;;(push containing-dir edge--recently-used-asset-homes))
+      (setq edge--recently-used-asset-homes (cons containing-dir edge--recently-used-asset-homes))
+      ;;(message "new list: %s" (prin1-to-string edge--recently-used-asset-homes))
       (edge--new-asset-from-template asset-type asset-name (symbol-value alist-sym) template containing-dir))))
 
 
