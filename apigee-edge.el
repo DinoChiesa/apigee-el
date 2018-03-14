@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2018-March-05 19:11:32>
+;; Last-saved : <2018-March-14 08:46:26>
 ;;
 ;;; Commentary:
 ;;
@@ -144,7 +144,28 @@
 ")
    '("application/x-www-form-urlencoded" "status=true&clientId={parsedRequest.client_id}")
    '("text/plain" "ok")
-   '("application/xml" "<message><here>{parsedRequest.client_id}</here></message>")))
+   '("application/xml" "<message><here>{parsedRequest.client_id}</here></message>")
+   '("soap" "<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/' xmlns:ser='http://avatax.avalara.com/services'>
+  <soap:Header>
+    <wsse:Security xmlns:wsse='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'
+                   soap:actor='http://schemas.xmlsoap.org/soap/actor/next'>
+      <wsse:UsernameToken>
+        <wsse:Username>{avalara.username}</wsse:Username>
+        <wsse:Password>{avalara.username}</wsse:Password>
+      </wsse:UsernameToken>
+    </wsse:Security>
+    <ser:Profile>
+      <ser:Name>Apigee TEST</ser:Name>
+      <ser:Client>Apigee Edge Client</ser:Client>
+      <ser:Adapter>SOAP API</ser:Adapter>
+      <ser:Machine>MBPRO</ser:Machine>
+    </ser:Profile>
+  </soap:Header>
+  <soap:Body>
+    <ser:Ping/>
+  </soap:Body>
+</soap:Envelope>
+")))
 
 
 (defvar edge--policy-template-alist nil
@@ -257,7 +278,9 @@ lexicographically by the car of each element, which is a string."
   "return the contents of the target template file.
 "
   (let ((filename
-         (edge--join-path-elements edge--base-template-dir "targets" template-filename)))
+         (if (s-starts-with? "/" template-filename)
+             template-filename
+         (edge--join-path-elements edge--base-template-dir "targets" template-filename))))
     (with-temp-buffer
       (insert-file-contents filename)
       (buffer-substring-no-properties (point-min) (point-max)))))
@@ -420,7 +443,7 @@ choose a target type to insert.
   (let ((apiproxy-dir (edge--path-of-apiproxy))
         (template-name
            (ido-completing-read
-            (format "%s template: " asset-type)
+            (format "target template: ")
             (mapcar (lambda (x) (car x)) edge--target-template-alist)
             nil nil nil)))
     (when template-name
@@ -435,18 +458,18 @@ choose a target type to insert.
 
           ;;(asset-name (read-string (format "%s name?: " asset-type) default-value nil default-value)))
 
-            (let ((default-value (edge--suggested-target-name template-name))
+            (let* ((default-value (edge--suggested-target-name template-name))
                   (target-name
                    (let (n)
                      (while (not have-name)
                        (setq n (read-string target-name-prompt default-value nil default-value)
                              have-name (edge--target-name-is-available n)
-                             policy-name-prompt "That name is in use. Target name: " ))
+                             target-name-prompt "That name is in use. Target name: " ))
                       n))
                    (elaborated-template
                     (progn
                       (while (string-match "##" raw-template)
-                        (setq raw-template (replace-match policy-name t t raw-template)))
+                        (setq raw-template (replace-match target-name t t raw-template)))
                       raw-template)))
 
               ;; create the file, expand the snippet, save it.
