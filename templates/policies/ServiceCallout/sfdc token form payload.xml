@@ -1,0 +1,28 @@
+<ServiceCallout name='##'>
+  <Request>
+    <Set>
+     <Headers>
+       <Header name='content-type'>application/x-www-form-urlencoded</Header>
+     </Headers>
+     <FormParams>
+       <FormParam name='username'>{sfdc_username}</FormParam>
+       <FormParam name='password'>{sfdc_password}</FormParam>
+       <FormParam name='client_id'>{sfdc_client_id}</FormParam>
+       <FormParam name='client_secret'>{sfdc_client_secret}</FormParam>
+       <FormParam name='grant_type'>password</FormParam>
+     </FormParams>
+     <Verb>POST</Verb>
+    </Set>
+  </Request>
+  <Response>tokenResponse</Response>
+  <HTTPTargetConnection>
+    <SSLInfo>
+        <Enabled>true</Enabled>
+        <IgnoreValidationErrors>false</IgnoreValidationErrors>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 3xx</Property>
+    </Properties>
+    <URL>https://login.salesforce.com/services/oauth2/token</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

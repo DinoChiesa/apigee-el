@@ -1,0 +1,43 @@
+<ServiceCallout name='##'>
+  <Request>
+    <Set>
+     <Headers>
+       <Header name='soapAction'>http://avatax.avalara.com/services/Ping</Header>
+     </Headers>
+     <Payload contentType='text/xml'>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://avatax.avalara.com/services">
+  <soap:Header>
+    <wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+                   soap:actor="http://schemas.xmlsoap.org/soap/actor/next">
+      <wsse:UsernameToken>
+        <wsse:Username>{avalara.username}</wsse:Username>
+        <wsse:Password>{avalara.username}</wsse:Password>
+      </wsse:UsernameToken>
+    </wsse:Security>
+    <ser:Profile>
+      <ser:Name>Apigee TEST</ser:Name>
+      <ser:Client>Apigee Edge Client</ser:Client>
+      <ser:Adapter>SOAP API</ser:Adapter>
+      <ser:Machine>MBPRO</ser:Machine>
+    </ser:Profile>
+  </soap:Header>
+  <soap:Body>
+    <ser:Ping/>
+  </soap:Body>
+</soap:Envelope>
+     </Payload>
+     <Verb>POST</Verb>
+    </Set>
+  </Request>
+  <Response>avalaraResponse</Response>
+  <HTTPTargetConnection>
+    <SSLInfo>
+        <Enabled>true</Enabled>
+        <IgnoreValidationErrors>true</IgnoreValidationErrors>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 3xx</Property>
+    </Properties>
+    <URL>https://development.avalara.net/Tax/TaxSvc.asmx?Ping</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

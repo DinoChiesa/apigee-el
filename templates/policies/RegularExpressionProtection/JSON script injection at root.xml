@@ -1,0 +1,9 @@
+<RegularExpressionProtection name="##">
+    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+    <JSONPayload escapeSlashCharacter='true'>
+        <JSONPath>
+            <Expression>$</Expression>
+            <Pattern><![CDATA[(?i)(.*?(<\s*script\b[^>]*>[^<]+<\s*\/\s*script\b\s*>).*)]]></Pattern>
+        </JSONPath>
+    </JSONPayload>
+</RegularExpressionProtection>

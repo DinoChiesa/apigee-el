@@ -1,0 +1,7 @@
+<RegularExpressionProtection name="##">
+  <Source>request</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Variable name="request.content">
+    <Pattern><![CDATA[(?i)(.*?(<\s*script\b[^>]*>[^<]+<\s*\/\s*script\b\s*>).*)]]></Pattern>
+  </Variable>
+</RegularExpressionProtection>
