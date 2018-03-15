@@ -1,0 +1,15 @@
+<VerifyJWT name='##'>
+  <Algorithm>RS256</Algorithm>
+  <IncludeTyp>true</IncludeTyp>
+  <Source>inbound.jwt</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <PublicKey>
+    <JWKS ref='jwksResponse.content'/>
+  </PublicKey>
+  <Subject>${1:DinoChiesa}</Subject>
+  <Issuer>${2:accounts.google.com}</Issuer>
+  <Audience>${3:urn://www.apigee.com/the-google-kirkland-office}</Audience>
+  <AdditionalClaims>
+    <Claim name='scope'>urn://www.apigee.com/apis/forever</Claim>
+  </AdditionalClaims>
+</VerifyJWT>

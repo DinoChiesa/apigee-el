@@ -1,0 +1,20 @@
+<GenerateJWT name='##'>
+  <Algorithm>HS256</Algorithm>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+    <Id>${1:cb24a396-4414-4793-b4ce-90333b694bff}</Id>
+  </SecretKey>
+  <Subject>${2:subject-subject-subject}</Subject>
+  <Issuer>${3:urn://apigee-edge-JWT-policy-test}</Issuer>
+  <Audience>${4:audience-here}</Audience>
+  <Id/>  <!-- optional; empty implies generate a jti -->
+  <ExpiresIn>8h</ExpiresIn>
+  <!--
+  <NotBefore>2017-08-14T11:00:21-07:00</NotBefore>
+  -->
+  <AdditionalClaims>
+    <Claim name='additional-claim-name'>additional-claim-value-goes-here</Claim>
+  </AdditionalClaims>
+  <OutputVariable>output_variable_name</OutputVariable>
+</GenerateJWT>

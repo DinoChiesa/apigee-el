@@ -1,0 +1,34 @@
+<VerifyJWT name='##'>
+  <Algorithm>HS256</Algorithm>
+  <Source>inbound.jwt</Source>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+  </SecretKey>
+  <Subject>${1:subject-subject-subject}</Subject>
+  <Issuer>${2:urn://apigee-edge-JWT-policy-test}</Issuer>
+  <Audience>${3:audience-here}</Audience>
+  <AdditionalClaims>
+    <Claim type='map' name='additional-claim-name'>{
+  "userinfo": {
+    "openbanking_intent_id": {
+      "value": "{intent-id}",
+      "essential": true
+    }
+  },
+  "id_token": {
+    "openbanking_intent_id": {
+      "value": "{intent-id}",
+      "essential": true
+    },
+    "acr": {
+      "essential": true,
+      "values": [
+        "{value1}",
+        "{value2}"
+      ]
+    }
+  }
+}
+</Claim>
+  </AdditionalClaims>
+</VerifyJWT>

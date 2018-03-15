@@ -1,0 +1,9 @@
+<VerifyJWT name='##'>
+  <Algorithm>HS256</Algorithm>
+  <Source>inbound.jwt</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <SecretKey>
+    <Value ref="private.secret-key"/>
+  </SecretKey>
+  <Issuer>${1:auth0}</Issuer>
+</VerifyJWT>
