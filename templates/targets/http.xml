@@ -13,6 +13,10 @@
     <Flows/>
     <HTTPTargetConnection>
         <Properties/>
+        <SSLInfo>
+          <Enabled>true</Enabled>
+          <TrustStore>ref://myTrustStoreRef</TrustStore>
+        </SSLInfo>
         <URL>https://dc-echo.herokuapp.com</URL>
     </HTTPTargetConnection>
 </TargetEndpoint>

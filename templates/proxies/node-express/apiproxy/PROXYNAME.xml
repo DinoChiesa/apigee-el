@@ -7,6 +7,6 @@
   <LastModifiedAt>1489340418969</LastModifiedAt>
   <LastModifiedBy>orgAdmin</LastModifiedBy>
   <TargetEndpoints>
-    <TargetEndpoint>default</TargetEndpoint>
+    <TargetEndpoint>node-target</TargetEndpoint>
   </TargetEndpoints>
 </APIProxy>

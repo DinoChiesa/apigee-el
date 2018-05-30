@@ -22,6 +22,14 @@ function requestHandler(request, response) {
   response.end(JSON.stringify(payload, null, 2) + '\n');
 }
 
+process.on('exit', function (code) {
+   console.log('Script terminating with code %s', code); 
+});
+
+process.on('uncaughtException', function (err) {
+    console.log(err.stack);
+});
+
 console.log('node.js application starting...');
 var svr = http.createServer(requestHandler);
 svr.listen(9000, function() {

@@ -1,0 +1,9 @@
+<InvalidateCache name='##'>
+    <CacheResource>${1:ApigeeCache}</CacheResource>
+    <Scope>${2:$$(yas-choose-value '(\"Global\" \"Application\" \"Proxy\" \"Target\" \"Exclusive\"))}</Scope>
+    <CacheKey>
+      <!--  <Prefix>apiAccessToken</Prefix> -->
+      <KeyFragment ref='${3:flowvariable.name}' />
+    </CacheKey>
+    <PurgeChildEntries>true</PurgeChildEntries>
+</InvalidateCache>

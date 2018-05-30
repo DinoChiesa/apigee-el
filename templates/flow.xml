@@ -1,0 +1,14 @@
+<Flows>
+  <Flow name='flow1'>
+    <Description>whatever you like</Description>
+    <Request>
+      <Step>
+        <Name>KVM-GetFlowData</Name>
+      </Step>
+      ...
+    </Request>
+    <Response>...    </Response>
+    <Condition>request.verb = "PUT" AND proxy.pathSuffix ~ "/v1/accounts/*/allowUseTaxInformationInInvoice"</Condition>
+  </Flow>
+  ...
+</Flows>

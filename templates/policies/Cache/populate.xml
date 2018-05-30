@@ -1,0 +1,15 @@
+<PopulateCache name='##'>
+  <CacheResource>${1:ApigeeCache}</CacheResource>
+  <Source>${2:variable.containing.value}</Source>
+  <Scope>${3:$$(yas-choose-value '(\"Global\" \"Application\" \"Proxy\" \"Target\" \"Exclusive\"))}</Scope>
+  <CacheKey>
+      <!--  <Prefix>fixedPrefix</Prefix> -->
+    <KeyFragment ref='${4:variable.containing.keyfrag}' />
+  </CacheKey>
+  <ExpirySettings>
+    <!-- include one of the following... -->
+    <TimeOfDay ref='time_variable'>hh:mm:ss</TimeOfDay>
+    <TimeoutInSec ref='duration_variable'>864000</TimeoutInSec> <!-- 864000 = 10 days -->
+    <ExpiryDate ref='date_variable'>mm-dd-yyyy</ExpiryDate>
+  </ExpirySettings>
+</PopulateCache>

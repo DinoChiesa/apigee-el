@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2018-March-14 08:46:26>
+;; Last-saved : <2018-March-15 12:45:22>
 ;;
 ;;; Commentary:
 ;;
@@ -431,7 +431,6 @@ Based on file availability."
           (setq val (1+ val)
                 tname (funcall next-name val)))
         tname)))
-
 
 
 ;;;###autoload

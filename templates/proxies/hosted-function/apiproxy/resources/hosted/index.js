@@ -16,6 +16,14 @@ var svr = http.createServer(function(req, resp) {
   }));
 });
 
+process.on('exit', function (code) {
+   console.log('Script terminating with code %s', code); 
+});
+
+process.on('uncaughtException', function (err) {
+    console.log(err.stack);
+});
+
 svr.listen(process.env.PORT || 3000, function() {
   console.log('Node HTTP server is listening');
 });

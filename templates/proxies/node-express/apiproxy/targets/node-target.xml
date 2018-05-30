@@ -1,4 +1,4 @@
-<TargetEndpoint name='default'>
+<TargetEndpoint name='node-target'>
   <Description>default target endpoint</Description>
   <FaultRules>
     <FaultRule name='other-fault'>

@@ -12,6 +12,7 @@
     "node": "0.10.32"
   },
   "dependencies": {
-    "express": "^4.15.3"
+    "express": "^4.15.3",
+    "moment-timezone": "~0.5.1"
   }
 }

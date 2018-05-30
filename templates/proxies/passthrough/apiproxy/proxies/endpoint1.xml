@@ -27,16 +27,12 @@
   <Flows>
     <Flow name='t1'>
       <Request>
-<!--
-        <Step>
-          <Name>AM-AddFormParam</Name>
-          <Condition>request.header.content-type = "application/x-www-form-urlencoded"</Condition>
-        </Step>
--->
       </Request>
-      <Response/>
-      <Condition>proxy.pathsuffix MatchesPath "/t1" and request.verb = "POST"</Condition>
+      <Response>
+      </Response>
+      <Condition>proxy.pathsuffix MatchesPath "/t1" and request.verb = "GET"</Condition>
     </Flow>
+
     <Flow name='t2'>
       <Request>
 <!--
@@ -46,7 +42,8 @@
         </Step>
 -->
       </Request>
-      <Response/>
+      <Response>
+      </Response>
       <Condition>proxy.pathsuffix MatchesPath "/t2" and request.verb = "POST"</Condition>
     </Flow>
 

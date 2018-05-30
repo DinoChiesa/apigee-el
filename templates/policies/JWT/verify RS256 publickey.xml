@@ -21,4 +21,37 @@
   <AdditionalClaims>
     <Claim name='scope'>urn://www.apigee.com/apitechforum.readonly</Claim>
   </AdditionalClaims>
+
+  <!-- upon success, sets these context variables:
+
+       jwt.##.algorithm
+       jwt.##.subject
+       jwt.##.issuer
+       jwt.##.audience
+       jwt.##.expiry
+       jwt.##.expiresIn
+       jwt.##.expired
+       jwt.##.valid
+       jwt.##.claim.custom-claim-name
+
+       upon failure, goes into fault state, and sets these context variables:
+       fault.name = ExpiredJwt
+                    InvalidJwt - not-before-time or issued-at time is invalid, or signature failed
+                    InvalidJwtAlgorithm
+                    JwtIssuerMismatch
+                    JwtAudienceMismatch
+                    JwtSubjectMismatch
+                    JwtClaimNotPresent
+       jwt.##.algorithm
+
+       and *maybe* if the algorithm is valid:
+       jwt.##.issuer
+       jwt.##.audience
+       jwt.##.expiry
+       jwt.##.expiresIn
+       jwt.##.expired
+       jwt.##.valid
+       jwt.##.claim.custom-claim-name
+  -->
+
 </VerifyJWT>

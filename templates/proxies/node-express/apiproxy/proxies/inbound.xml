@@ -1,4 +1,4 @@
-<ProxyEndpoint name='default'>
+<ProxyEndpoint name='inbound'>
   <Description>Default Proxy</Description>
   <HTTPProxyConnection>
     <BasePath>/nodecounter</BasePath>
@@ -28,7 +28,7 @@
   <Flows/>
 
   <RouteRule name='InvokeRouteRule'>
-    <TargetEndpoint>default</TargetEndpoint>
+    <TargetEndpoint>node-target</TargetEndpoint>
   </RouteRule>
 
 </ProxyEndpoint>

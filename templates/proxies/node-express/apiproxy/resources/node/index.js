@@ -1,33 +1,48 @@
 // index.js
-// ------------------------------------------------------------------
-//
-// Description goes here....
-//
-// created: Sun Mar 12 10:32:17 2017
-// last saved: <2017-March-12 11:48:30>
 
-var express=require('express');
+var express =require('express');
+var moment = require('moment-timezone');
 var app = express();
-var x=0;
+var x = 0;
 
 app.get('/servicex', function(request, response) {
   response.header('x',x)
     .status(200)
-    .send({ message: 'ok' });
+    .send({
+      message: 'ok',
+      now : moment().tz('GMT').format()
+    });
 });
 
-app.put('/servicex', function (request, response) {
+app.post('/servicex', function (request, response) {
   x=x+1;
-  response.header('Content-Type', 'application/json')
+  response.header('x', x)
     .status(200)
-    .send({ value: x });
+    .send({
+      message: 'ok',
+      now : moment().tz('GMT').format()
+    });
 });
 
 // default behavior
 app.all(/^\/.*/, function(request, response) {
+  var payload = {
+        incomingUrl : request.url,
+        message : "This is not the server you're looking for."
+      };
   response.header('Content-Type', 'application/json')
     .status(404)
-    .send('{ "message" : "This is not the server you\'re looking for." }\n');
+    .send(payload);
 });
 
-app.listen(3000, function () { console.log('Example app listening on port 3000!'); });
+process.on('exit', function (code) {
+   console.log('Script terminating with code %s', code);
+});
+
+process.on('uncaughtException', function (err) {
+    console.log(err.stack);
+});
+
+app.listen(3000, function () {
+  console.log('Example app listening on port 3000!');
+});
