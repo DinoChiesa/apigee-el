@@ -1,0 +1,14 @@
+<ServiceCallout name='##'>
+  <Request clearPayload="false" variable="existingMessage"/>
+  <Response>scResponse</Response>
+  <HTTPTargetConnection>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <IgnoreValidationErrors>true</IgnoreValidationErrors>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 3xx</Property>
+    </Properties>
+    <URL>https://dc-echo.herokuapp.com</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

@@ -1,6 +1,14 @@
  <OAuthV2 name="OAuthV2-GenerateAccessToken-AuthCode">
   <ExternalAuthorization>false</ExternalAuthorization>
   <Operation>GenerateAccessToken</Operation>
+  <!--
+    ExpiresIn, in milliseconds. The ref is optional. The explicitly specified
+    value is the default, when the variable reference cannot be resolved.
+      2400000 = 40 minutes
+      3600000 = 60 minutes
+  -->
+  <ExpiresIn ref='flow.variable'>2400000</ExpiresIn>
+
   <SupportedGrantTypes>
     <GrantType>authorization_code</GrantType>
   </SupportedGrantTypes>

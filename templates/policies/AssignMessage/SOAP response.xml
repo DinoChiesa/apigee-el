@@ -1,0 +1,20 @@
+<AssignMessage name='##'>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Set>
+    <Payload contentType='application/xml'>
+      <soap:Envelope xmlns:soap='${2:$$(yas-choose-value (list "http://schemas.xmlsoap.org/soap/envelope/" "http://www.w3.org/2003/05/soap-envelope/"))}'>
+        <soap:Body>
+          <m:GetTodoResponse xmlns:m="https://jsonplaceholder.typicode.com/todos">
+            <m:Completed>{json.completed}</m:Completed>
+            <m:UserId>{json.userId}</m:UserId>
+            <m:Id>{json.id}</m:Id>
+            <m:Title>{json.title}</m:Title>
+          </m:GetTodoResponse>
+        </soap:Body>
+      </soap:Envelope>
+
+    </Payload>
+    <StatusCode>200</StatusCode>
+    <ReasonPhrase>OK</ReasonPhrase>
+  </Set>
+</AssignMessage>

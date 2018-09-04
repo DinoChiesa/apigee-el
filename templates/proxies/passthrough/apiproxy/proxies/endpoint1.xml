@@ -58,7 +58,7 @@
   </Flows>
 
   <RouteRule name="default">
-    <TargetEndpoint>echo</TargetEndpoint>
+    <TargetEndpoint>target-1</TargetEndpoint>
   </RouteRule>
 
 </ProxyEndpoint>

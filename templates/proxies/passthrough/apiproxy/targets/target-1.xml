@@ -1,4 +1,4 @@
-<TargetEndpoint name="echo">
+<TargetEndpoint name="target-1">
     <Description/>
     <FaultRules/>
     <PreFlow name="PreFlow">
@@ -11,6 +11,10 @@
     </PostFlow>
     <Flows/>
     <HTTPTargetConnection>
+      <SSLInfo>
+        <Enabled>true</Enabled>
+        <IgnoreValidationErrors>false</IgnoreValidationErrors>
+      </SSLInfo>
         <Properties/>
         <URL>https://dc-echo.herokuapp.com</URL>
     </HTTPTargetConnection>

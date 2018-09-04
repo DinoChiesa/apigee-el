@@ -1,0 +1,23 @@
+<ResponseCache name="##">
+    <CacheResource>${1:cache1}</CacheResource>
+    <CacheKey>
+      <Prefix/>
+      <KeyFragment ref='${2:flowvariable.name}' />
+    </CacheKey>
+    <Scope>${3:$$(yas-choose-value '(\"Global\" \"Application\" \"Proxy\" \"Target\" \"Exclusive\"))}</Scope>
+    <ExpirySettings>
+      <!--
+        <ExpiryDate/>
+        <TimeOfDay/>
+      -->
+      <TimeoutInSec ref="${4:flow.variable.here}">120</TimeoutInSec>
+    </ExpirySettings>
+    <CacheLookupTimeoutInSeconds/>
+    <ExcludeErrorResponse/>
+    <SkipCacheLookup>request.verb != "GET"</SkipCacheLookup>
+    <SkipCachePopulation>request.verb != "GET"</SkipCachePopulation>
+    <!--
+        <UseAcceptHeader/>
+        <UseResponseCacheHeaders/>
+    -->
+</ResponseCache>

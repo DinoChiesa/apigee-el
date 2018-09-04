@@ -2,6 +2,18 @@ Thursday,  8 June 2017, 15:25
 
 x Sharedflows - templates
 
+ maybe create edge-add-resource = add resource of known type, like xml-to-json.xsl
+   or a known JS resource ?
+
+ figure out some way to parameterize the JS Steps and XSL steps.
+   This is related to the above. And may be the interface to the
+   above. 
+
+
+ Figure out how to get an XML parser in elisp that respects XML
+   comments, so my templates don't lose their comments in the cycle of
+   deserialization and re-serialization. 
+ 
 
 
 

@@ -3,10 +3,11 @@
     <!--
     ExpiresIn, in milliseconds. The ref is optional. The explicitly specified
     value is the default, when the variable reference cannot be resolved.
+        60000 = 1 minute
       2400000 = 40 minutes
       3600000 = 60 minutes
     -->
-    <ExpiresIn ref='flow.variable'>2400000</ExpiresIn>
+    <ExpiresIn ref='flow.variable'>60000</ExpiresIn>
 
     <!-- The following are Optional -->
     <ResponseType>flow.variable</ResponseType>

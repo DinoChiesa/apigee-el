@@ -1,0 +1,14 @@
+<Javascript name='##' timeLimit='200' >
+  <!-- <DisplayName>${1:##}</DisplayName> -->
+  <Properties>
+    <!-- to retrieve properties in js code:   properties.prop1 -->
+    <Property name='prop1'>value-here</Property>
+  </Properties>
+  <SSLInfo>
+     <Enabled>true</Enabled>
+     <ClientAuthEnabled>false</ClientAuthEnabled>
+     <TrustStore>ref://${2:truststore-ref}</TrustStore>
+  </SSLInfo>
+  <IncludeURL>jsc://URI.js</IncludeURL> <!-- optionally specify a shared resource here -->
+  <ResourceURL>jsc://${3:$$(edge--fixup-script-name \"##\" \"JS\")}.js</ResourceURL>
+</Javascript>

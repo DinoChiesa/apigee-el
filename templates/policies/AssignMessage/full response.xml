@@ -4,7 +4,7 @@
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <Set>
     <Payload contentType='${2:$$(yas-choose-value (reverse (edge--sort-strings (mapcar 'car edge--message-payload-sample-alist))))}'>${2:$(cadr (assoc yas-text edge--message-payload-sample-alist))}</Payload>
-    <StatusCode>${3:$$(yas-choose-value (reverse (edge--sort-strings (mapcar 'car edge--http-status-message-alist))))}</StatusCode>
+    <StatusCode>${3:$$(yas-choose-value (edge--sort-strings (mapcar 'car edge--http-status-message-alist)))}</StatusCode>
     <ReasonPhrase>${3:$(cadr (assoc yas-text edge--http-status-message-alist))}</ReasonPhrase>
   </Set>
 
