@@ -4,9 +4,9 @@
 
 'use strict';
 const fs = require('fs');
-var http = require('http');
-var url = require('url');
-var applications = JSON.parse(fs.readFileSync('applications.json', 'utf-8'));
+const http = require('http');
+const url = require('url');
+const applications = JSON.parse(fs.readFileSync('applications.json', 'utf-8'));
 
 function requestHandler(request, response) {
   var queryparams = url.parse(request.url, true).query;
@@ -22,8 +22,15 @@ function requestHandler(request, response) {
   response.end(JSON.stringify(payload, null, 2) + '\n');
 }
 
+function serverListen() {
+  var svr = http.createServer(requestHandler);
+  svr.listen(9000, function() {
+    console.log('Node HTTP server is listening');
+  });
+}
+
 process.on('exit', function (code) {
-   console.log('Script terminating with code %s', code); 
+   console.log('Script terminating with code %s', code);
 });
 
 process.on('uncaughtException', function (err) {
@@ -31,7 +38,5 @@ process.on('uncaughtException', function (err) {
 });
 
 console.log('node.js application starting...');
-var svr = http.createServer(requestHandler);
-svr.listen(9000, function() {
-  console.log('Node HTTP server is listening');
-});
+
+serverListen();
