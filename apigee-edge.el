@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2018-September-04 14:04:47>
+;; Last-saved : <2018-December-11 14:16:44>
 ;;
 ;;; Commentary:
 ;;
@@ -718,6 +718,57 @@ appropriate.
               (message "yank to add the step declaration...")
               )))))))
 
+;; (defun edge-maybe-sync-policy-filename ()
+;;   "synchronizes the name of the file with the name specified in the name
+;; attribute in the root element, if the file is a policy file.
+;;
+;; This function is normally used as an after-save-hook, and normally only in an
+;; xml-mode (such as `nxml-mode'), since policy files are XML files.
+;;
+;; With this hook, the human can modify the name attribute inside the XML, and
+;; save the file; and then that change gets reflected in the filename for the buffer
+;; and also in every other file in the API-proxy bundle.
+;; "
+;;   (interactive)
+;;   (let ((orig-filename (buffer-file-name)))
+;;     (if (apigee--is-policy-file orig-filename)
+;;         (let* ((orig-policyname (file-name-sans-extension (file-name-nondirectory orig-filename)))
+;;                (root (xml-parse-region))
+;;                (policy (car root))
+;;                (attrs (xml-node-attributes policy))
+;;                (new-policyname (cdr (assq 'name attrs))))
+;;           (if (and new-policyname
+;;                    (not (s-equals-p orig-policyname new-policyname)))
+;;               (let* ((new-short-filename (concat new-policyname ".xml"))
+;;                      (new-filename
+;;                       (concat (file-name-directory orig-filename) new-short-filename)))
+;;                 (rename-file orig-filename new-filename 1)
+;;                 (rename-buffer new-short-filename t) ;; get unique buffer name
+;;                 (set-visited-file-name new-filename) ;; sets modified flag t
+;;                 (set-buffer-modified-p nil)
+;;                 ;; now, search/replace all files in the apiproxy to replace
+;;                 ;; that old policy name with the new policy name.
+;;                 (let ((policy-buffer-name (buffer-name))
+;;                       (file-list (apigee-all-files-in-apiproxy))
+;;                       (re1 (concat "\\<" (regexp-quote orig-policyname) "\\>")))
+;;                   (while file-list
+;;                     (let* ((one-file (car file-list))
+;;                            (base-filename (file-name-nondirectory one-file)))
+;;                       (if (not (or (s-starts-with? "#" base-filename)
+;;                                    (s-starts-with? ".#" base-filename)))
+;;                           (with-current-buffer (find-file-noselect one-file)
+;;                             (save-excursion
+;;                               (goto-char (point-min))
+;;                               (let ((need-save nil)
+;;                                     (original-modified (buffer-modified-p)))
+;;                                 (while (re-search-forward re1 nil t)
+;;                                   (replace-match new-policyname)
+;;                                   (setq need-save t))
+;;                                 (if (and need-save
+;;                                          (not original-modified)
+;;                                          (not (s-equals-p policy-buffer-name (buffer-name))))
+;;                                     (save-buffer))))))
+;;                       (setq file-list (cdr file-list)))))))))))
 
 (defun edge--cleanup-newlines ()
   "collapse multiple newlines"
@@ -736,7 +787,6 @@ appropriate.
     (while (re-search-forward "&quot;\\([ <)]\\)" (point-max) t)
       (replace-match (concat "\"" (match-string 1))))))
 
-
 (defun edge--serialize-xml-elt (elt)
   "Serialize an XML element into the current buffer, and then collapse newlines."
   (erase-buffer)
@@ -746,7 +796,6 @@ appropriate.
   (save-excursion
     (indent-region (point-min) (point-max)))
   )
-
 
 (defun edge--verify-exactly-one (xml-file-list source-dir)
   "verifies that there is exactly one xml file."
