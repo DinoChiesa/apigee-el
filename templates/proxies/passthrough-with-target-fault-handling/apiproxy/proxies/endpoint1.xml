@@ -49,6 +49,15 @@
       <Response/>
       <Condition>proxy.pathsuffix MatchesPath "/t2" and request.verb = "POST"</Condition>
     </Flow>
+
+    <Flow name='unknown request'>
+      <Request>
+        <Step><Name>RF-UnknownRequest</Name></Step>
+      </Request>
+      <Response>
+      </Response>
+    </Flow>
+
   </Flows>
 
   <RouteRule name="default">

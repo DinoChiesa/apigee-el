@@ -13,7 +13,6 @@
     <ResponseType>flow.variable</ResponseType>
     <ClientId>flow.variable</ClientId>
     <RedirectUri>flow.variable</RedirectUri>
-    <Code>flow.variable</Code>
     <Scope>flow.variable</Scope>
     <State>flow.variable</State>
 
@@ -23,7 +22,7 @@
     subsequently validated.
     -->
     <Attributes>
-      <!-- If set to false, the attribute wont be delivered in the auth code response. -->
+      <!-- If display=false, the attribute wont be delivered in the auth code response. -->
       <Attribute name='attr_name1' ref='flow.variable1' display='true|false'>value1</Attribute>
       <Attribute name='attr_name2' ref='flow.variable2' display='true|false'>value2</Attribute>
     </Attributes>

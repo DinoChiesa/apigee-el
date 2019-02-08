@@ -1,5 +1,17 @@
 <Quota name="##" type='flexi'>
-    <Interval>1</Interval>
-    <TimeUnit>minute</TimeUnit>
-    <Allow count='3'/>
+  <!--
+      If the need is to rate limit requests by a particular
+      party, such as a particular client app, or a particular
+      user, then an identifier should be specified that
+      uniquely identifies the party or entity on behalf of
+      which you wish to collect counts. If the need is to rate
+      limit requests irrespective of any client or user, then
+      omit the identifier.
+  -->
+  <!-- <Identifier ref='client_id' /> -->
+  <Distributed>true</Distributed>
+  <Synchronous>false</Synchronous>
+  <Interval>1</Interval>
+  <TimeUnit>minute</TimeUnit>
+  <Allow count='3' countRef='variable_containing_count'/>
 </Quota>

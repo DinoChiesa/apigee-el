@@ -2,8 +2,73 @@
   <DisplayName>##</DisplayName>
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <AssignVariable>
-    <Name>parsedRequest.client_id</Name>
-    <Ref>request.queryparam.client_id</Ref>
-    <Value>BADDBEEF</Value>
+    <Name>timeFormatString1</Name>
+    <Value>yyyyMMdd HH:mm:ss.SSS</Value> <!-- EEEE -->
   </AssignVariable>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{timeFormatUTCMs(timeFormatString1,system.timestamp)}</Template>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{xeger('[0-9]{12}')}</Template>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>minus_4</Name>
+    <Value>-4</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>zero</Name>
+    <Value>0</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{substring(alpha,zero,minus_4)}</Template>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{toLowerCase(assigned)}</Template>
+  </AssignVariable>
+
+  <AssignVariable>
+    <Name>my_destination_variable</Name>
+    <Template>{system.uuid}-{messageid}</Template>
+  </AssignVariable>
+
+
+  <AssignVariable>
+    <Name>json_value_1</Name>
+    <Value>{
+      "results" : [
+        { "address" : { "line1" : "55 Park Avenue", "zip" : "10016" }, "name" : "Fred Meyer" },
+        { "address" : { "line1" : "1060 West Addison Street", "zip" : "60613" }, "name" : "Mae West" }
+      ]
+    }</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>json_path_1</Name>
+    <Value>$.results[?(@.name == 'Mae West')][0].address.line1</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Value>BADDBEEF</Value>
+    <Template>{jsonPath(json_path_1,json_value_1)}</Template>
+  </AssignVariable>
+
+
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{sha256Base64(abc_text)}</Template>
+  </AssignVariable>
+
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{replaceAll(messageid,'[0-9]','X')}</Template>
+  </AssignVariable>
+
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{randomLong(zero,plus_1000)}</Template>
+  </AssignVariable>
+
 </AssignMessage>
