@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2018-December-11 14:16:44>
+;; Last-saved : <2019-August-22 15:11:37>
 ;;
 ;;; Commentary:
 ;;
@@ -109,9 +109,9 @@
    '("ExtractVariables" "EV")
    '("OAuthV2" "OAuthV2")
    '("XMLToJSON" "XMLToJSON")
-   '("VerifyJWT" "JWT")
-   '("GenerateJWT" "JWT")
-   '("DecodeJWT" "JWT")
+   ;; '("VerifyJWT" "JWT")
+   ;; '("GenerateJWT" "JWT")
+   ;; '("DecodeJWT" "JWT")
    '("JSONToXML" "JSONToXML")
    '("GetOAuthV2Info" "OAuthV2-GetInfo")
    '("SetOAuthV2Info" "OAuthV2-SetInfo")
@@ -634,10 +634,14 @@ if no file exists by that name in the given proxy.
          (concat (edge--path-of-apiproxy) "apiproxy/policies/" pname ".xml")))
     (not (file-exists-p filename-to-check))))
 
-(defun edge--suggested-policy-name (ptype)
+(defun edge--suggested-policy-name (ptype filename)
   "Returns a string that contains a default policy name, uses a counter
 that is indexed per policy type within each API Proxy.
 "
+  (if (or (string= ptype "JWT") (string= ptype "JWS"))
+      (let ((shortname (car (reverse (split-string filename "/")))))
+        (setq ptype (concat (s-capitalize (car (split-string shortname " "))) ptype))))
+
   (let ((ptype (or (cadr (assoc ptype edge--policytype-shortform)) ptype))
         (val 1)
         (next-name (lambda (v) (concat ptype "-" (format "%d" v)))))
@@ -673,7 +677,7 @@ appropriate.
             (and (not (file-exists-p policy-dir))
                  (make-directory policy-dir))
             (let* ((raw-template (edge--get-policy-template-contents template-filename))
-                   (default-value (edge--suggested-policy-name ptype))
+                   (default-value (edge--suggested-policy-name ptype template-filename))
                    (policy-name
                     (let (n)
                       (while (not have-name)
