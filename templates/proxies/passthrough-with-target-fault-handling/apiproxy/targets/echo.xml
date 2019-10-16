@@ -19,6 +19,6 @@
     <Flows/>
     <HTTPTargetConnection>
         <Properties/>
-        <URL>https://dc-echo.herokuapp.com</URL>
+        <URL>https://buoyant-climate-208500.appspot.com</URL>
     </HTTPTargetConnection>
 </TargetEndpoint>

@@ -1,0 +1,12 @@
+<VerifyJWS name="##">
+  <Source>request.formparam.input</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Algorithms>
+    <Key>ECDH-ES</Key>
+    <Content>A128GCM</Content>
+  </Algorithms>
+  <PrivateKey>
+    <Value ref="private.ec_privatekey"/>
+    <Id>09f558a60b23</Id>
+  </PrivateKey>
+</VerifyJWS>

@@ -1,0 +1,10 @@
+<VerifyJWS name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Algorithms>
+    <Key>dir</Key>
+  </Algorithms>
+  <Source>request.formparam.input</Source>
+  <DirectKey>
+    <Value ref='private.directkey'/>
+  </DirectKey>
+</VerifyJWS>

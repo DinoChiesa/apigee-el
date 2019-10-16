@@ -1,0 +1,14 @@
+<GenerateJWT name='##'>
+  <Algorithms>
+    <Key>dir</Key>
+    <Content>A256CBC-HS512</Content>
+  </Algorithms>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <DirectKey>
+    <Value ref='private.directkey'/>
+  </DirectKey>
+  <Subject>subject-here</Subject>
+  <Issuer>urn://apigee-edge-JWT-policy-test</Issuer>
+  <ExpiresIn>5m</ExpiresIn>
+  <OutputVariable>generated</OutputVariable>
+</GenerateJWT>

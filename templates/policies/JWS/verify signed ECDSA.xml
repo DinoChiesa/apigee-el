@@ -1,0 +1,8 @@
+<VerifyJWS name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Algorithm>ES256</Algorithm>
+  <Source>request.formparam.input</Source>
+  <PublicKey>
+    <Value ref="ec_publickey"/>
+  </PublicKey>
+</VerifyJWS>

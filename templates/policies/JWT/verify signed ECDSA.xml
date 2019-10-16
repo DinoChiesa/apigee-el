@@ -1,0 +1,21 @@
+<VerifyJWT name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Algorithm>ES256</Algorithm>
+  <Source>request.formparam.input</Source>
+  <PublicKey>
+    <Value ref="ec_publickey"/>
+  </PublicKey>
+  <Subject>subject1</Subject>
+  <Issuer>urn://apigee-edge-JWT-policy-test</Issuer>
+  <Audience>audience-here</Audience>
+  <AdditionalClaims>
+    <Claim type='map' name='custom-claim-name'>{
+      "abc": {
+        "abc": "asd",
+        "xyz": {"qwe":"pwe","234":"rty"}
+      }
+    }</Claim>
+    <!-- the order of array elements is meaningful -->
+    <Claim type='string' array="true" name='string-array-claim'>claim1,claim2,claim3</Claim>
+  </AdditionalClaims>
+</VerifyJWT>

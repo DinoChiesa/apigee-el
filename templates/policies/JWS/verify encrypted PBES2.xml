@@ -1,0 +1,10 @@
+<VerifyJWS name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Source>request.formparam.input</Source>
+  <Algorithms>
+    <Key>PBES2-HS256+A128KW</Key>
+  </Algorithms>
+  <PasswordKey>
+    <Value ref='private.password'/>
+  </PasswordKey>
+</VerifyJWS>

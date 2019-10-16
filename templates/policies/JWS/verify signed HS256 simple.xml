@@ -1,0 +1,8 @@
+<VerifyJWS name='##'>
+  <Algorithm>HS256</Algorithm>
+  <Source>inbound.jws</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <SecretKey>
+    <Value ref="private.secret-key"/>
+  </SecretKey>
+</VerifyJWS>

@@ -1,0 +1,12 @@
+<GenerateJWS name='##'>
+  <Algorithms>
+    <Key>dir</Key>
+    <Content>A256CBC-HS512</Content>
+  </Algorithms>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <DirectKey>
+    <Value ref='private.directkey'/>
+  </DirectKey>
+  <Payload ref='foobar'/>
+  <OutputVariable>generated</OutputVariable>
+</GenerateJWS>

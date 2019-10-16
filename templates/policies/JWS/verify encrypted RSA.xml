@@ -1,0 +1,10 @@
+<VerifyJWS name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Source>request.formparam.input</Source>
+  <Algorithms>
+    <Key>RSA-OAEP-256</Key>
+  </Algorithms>
+  <PrivateKey>
+    <Value ref="private.rsa_privatekey"/>
+  </PrivateKey>
+</VerifyJWS>

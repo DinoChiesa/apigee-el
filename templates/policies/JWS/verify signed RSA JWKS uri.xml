@@ -1,0 +1,11 @@
+<VerifyJWS name='##'>
+  <Algorithm>${1:$$(yas-choose-value '(\"RS256\" \"PS256\" ))}</Algorithm>
+  <Source>${2:inbound.jws}</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <PublicKey>
+    <JWKS uri="${3:https://www.googleapis.com/oauth2/v3/certs}"/>
+  </PublicKey>
+  <AdditionalHeaders>
+    <Claim name='scope'>urn://www.apigee.com/apis/forever</Claim>
+  </AdditionalHeaders>
+</VerifyJWS>

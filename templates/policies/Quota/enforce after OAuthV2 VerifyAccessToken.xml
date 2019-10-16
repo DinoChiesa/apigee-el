@@ -1,6 +1,6 @@
 <Quota name='##'>
     <DisplayName>##</DisplayName>
-    <!-- use the client_id that is set after OAuthV2/VerifyAPIKey -->
+    <!-- use the client_id that is set after OAuthV2/VerifyAccessToken -->
     <Identifier ref='client_id' />
     <!-- the count specified is used unless overridden by the variable referenced here -->
     <Allow countRef='apiproduct.developer.quota.limit' count='1000'/>

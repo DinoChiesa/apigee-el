@@ -1,0 +1,13 @@
+<VerifyJWT name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Source>request.formparam.input</Source>
+  <Algorithms>
+    <Key>A128KW</Key>
+    <Content>A128GCM</Content>
+  </Algorithms>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+  </SecretKey>
+  <Subject>subject-here</Subject>
+  <Issuer>urn://apigee-edge-JWT-policy-test</Issuer>
+</VerifyJWT>

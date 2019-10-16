@@ -1,13 +1,13 @@
 <GenerateJWT name='##'>
-  <Algorithm>RS256</Algorithm>
+  <Algorithm>${1:$$(yas-choose-value '(\"RS256\" \"PS256\" ))}</Algorithm>
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <PrivateKey>
     <Value ref="private.key"/>
-    <Id>${1:cb24a396-4414-4793-b4ce-90333b694bff}</Id>
+    <Id>${2:cb24a396-4414-4793-b4ce-90333b694bff}</Id>
   </PrivateKey>
   <Subject ref="jwt_subject" />
-  <Issuer>${2:issuer-goes-here}</Issuer>
-  <Audience>${3:audience-here}</Audience>
+  <Issuer>${3:issuer-goes-here}</Issuer>
+  <Audience>${4:audience-here}</Audience>
   <Id/>  <!-- optional; empty implies generate a jti -->
   <ExpiresIn>1h</ExpiresIn>
   <!--
@@ -16,5 +16,5 @@
   <AdditionalClaims>
     <Claim name='additional-claim-name'>additional-claim-value-goes-here</Claim>
   </AdditionalClaims>
-  <OutputVariable>${4:variable-name-here}</OutputVariable>
+  <OutputVariable>${5:variable-name-here}</OutputVariable>
 </GenerateJWT>

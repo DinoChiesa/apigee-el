@@ -1,11 +1,11 @@
 <Quota name="##" type='flexi'>
   <!--
-      If the need is to rate limit requests by a particular
-      party, such as a particular client app, or a particular
-      user, then an identifier should be specified that
-      uniquely identifies the party or entity on behalf of
-      which you wish to collect counts. If the need is to rate
-      limit requests irrespective of any client or user, then
+      To rate limit requests by a particular party,
+      such as a particular client app, or a particular
+      user, specify an identifier that uniquely
+      identifies the party or entity on behalf of which
+      you wish to collect counts. To rate limit
+      requests irrespective of any client or user,
       omit the identifier.
   -->
   <!-- <Identifier ref='client_id' /> -->

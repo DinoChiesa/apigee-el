@@ -1,0 +1,31 @@
+<VerifyJWS name='##'>
+  <Algorithm>HS256</Algorithm>
+  <Source>inbound.jws</Source>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+  </SecretKey>
+  <AdditionalHeaders>
+    <Claim type='map' name='additional-claim-name'>{
+  "userinfo": {
+    "openbanking_intent_id": {
+      "value": "{intent-id}",
+      "essential": true
+    }
+  },
+  "id_token": {
+    "openbanking_intent_id": {
+      "value": "{intent-id}",
+      "essential": true
+    },
+    "acr": {
+      "essential": true,
+      "values": [
+        "{value1}",
+        "{value2}"
+      ]
+    }
+  }
+}
+</Claim>
+  </AdditionalHeaders>
+</VerifyJWS>

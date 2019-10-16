@@ -1,0 +1,4 @@
+<AccessEntity name='##'>
+  <EntityType value='apiproduct' />
+  <EntityIdentifier type='apiproductname' ref='${1:productname}' />
+</AccessEntity>

@@ -1,0 +1,12 @@
+<VerifyJWS name='##'>
+  <Algorithm>${1:$$(yas-choose-value '(\"RS256\" \"PS256\" ))}</Algorithm>
+  <Source>inbound.jws</Source>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <PublicKey>
+    <JWKS ref='jwksContent'/>
+  </PublicKey>
+  <Issuer>${2:whatever}</Issuer>
+  <AdditionalHeaders>
+    <Claim name='scope'>urn://www.apigee.com/apis/forever</Claim>
+  </AdditionalHeaders>
+</VerifyJWS>

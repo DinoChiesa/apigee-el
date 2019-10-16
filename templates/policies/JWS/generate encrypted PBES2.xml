@@ -1,0 +1,14 @@
+<GenerateJWS name='##'>
+  <Algorithms>
+    <Key>PBES2-HS256+A128KW</Key>
+    <Content>A128GCM</Content>
+  </Algorithms>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <PasswordKey>
+    <Value ref='private.password'/>
+    <SaltLength>16</SaltLength> <!-- in bytes -->
+    <PBKDF2Iterations>10001</PBKDF2Iterations>
+  </PasswordKey>
+  <Payload ref='foobar'/>
+  <OutputVariable>generated</OutputVariable>
+</GenerateJWS>

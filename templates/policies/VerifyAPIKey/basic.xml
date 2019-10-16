@@ -1,7 +1,7 @@
 <VerifyAPIKey name='##'>
     <!-- created at ${1:$$(format-time-string \"%Y-%m-%dT%T%z\" (current-time) t)} -->
     <DisplayName>Verify API Key</DisplayName>
-    <APIKey ref='${2:$$(yas-choose-value '(\"request.queryparam.apikey\" \"request.header.X-Apikey\"))}'></APIKey>
+    <APIKey ref='${2:$$(yas-choose-value '(\"request.queryparam.apikey\" \"request.header.X-Apikey\"))}'/>
 <!--
 Variables populated by this policy: verifyapikey.{policy_name}.
 
@@ -14,7 +14,9 @@ developer.id: The developer ID of the developer registered as the owner of the r
 failed: Set when API Key validation fails
 developer.app.{custom_attribute_name} ?? - custom attribute on the app
 {custom_attribute_name_of_app}: Any custom attribute derived from the app profile?
-{custom_attribute_name_of_appkey}: Any custom attributes derived from the app key profile
+{custom_attribute_name_of_apikey}: Any custom attributes derived from the api key profile
+
+app.apiproducts - array of product names authorized on this API Key
 apiproduct.name*: The name of the API product used to validate the request
 apiproduct.{custom_attribute_name}*: Any custom attribute derived from the API product profile
 apiproduct.developer.quota.limit*

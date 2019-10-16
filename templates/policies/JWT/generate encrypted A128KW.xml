@@ -1,0 +1,14 @@
+<GenerateJWT name='##'>
+  <Algorithms>
+    <Key>A128KW</Key>
+    <Content>A128GCM</Content>
+  </Algorithms>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+  </SecretKey>
+  <Subject>subject-here</Subject>
+  <Issuer>urn://apigee-edge-JWT-policy-test</Issuer>
+  <ExpiresIn>30m</ExpiresIn>
+  <OutputVariable>generated</OutputVariable>
+</GenerateJWT>

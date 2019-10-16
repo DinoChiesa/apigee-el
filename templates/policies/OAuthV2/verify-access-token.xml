@@ -4,6 +4,7 @@
     <!-- by default, pulls token from Authorization header as per OAuthV2.0 spec -->
     <AccessToken>flow.variable</AccessToken>      <!-- Optional -->
     <AccessTokenPrefix>Bearer</AccessTokenPrefix> <!-- Optional -->
+    <Scope>xyz</Scope>
     <!--
     This policy sets the following flow variables:
       organization_name

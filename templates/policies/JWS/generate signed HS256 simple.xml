@@ -1,0 +1,12 @@
+<GenerateJWS name='##'>
+  <Algorithm>HS256</Algorithm>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+  </SecretKey>
+  <AdditionalHeaders>
+    <Claim name='issuer'>apigee-edge</Claim>
+  </AdditionalHeaders>
+  <Payload ref='request.content'/>
+  <OutputVariable>output_variable_name</OutputVariable>
+</GenerateJWS>

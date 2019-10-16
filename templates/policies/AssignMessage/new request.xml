@@ -4,6 +4,6 @@
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <Set>
     <Payload contentType='${1:$$(yas-choose-value (reverse (edge--sort-strings (mapcar 'car edge--message-payload-sample-alist))))}'>${2:$$(cadr (assoc yas-text edge--message-payload-sample-alist))}</Payload>
-    <Verb>GET</Verb>
+    <Verb>POST</Verb>
   </Set>
 </AssignMessage>

@@ -1,0 +1,13 @@
+<GenerateJWS name='##'>
+  <Algorithm>${1:$$(yas-choose-value '(\"RS256\" \"PS256\" ))}</Algorithm>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <PrivateKey>
+    <Value ref="private.key"/>
+    <Id>${1:cb24a396-4414-4793-b4ce-90333b694bff}</Id>
+  </PrivateKey>
+  <AdditionalHeaders>
+    <Claim name='additional-claim-name'>additional-claim-value-goes-here</Claim>
+  </AdditionalHeaders>
+  <Payload ref="${2:request.content}"/>
+  <OutputVariable>${3:variable-name-here}</OutputVariable>
+</GenerateJWS>

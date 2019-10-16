@@ -1,0 +1,10 @@
+<Javascript name='##' timeLimit='200' >
+  <!-- <DisplayName>${1:##}</DisplayName> -->
+  <Properties>
+    <!-- to retrieve properties in js code:   properties.prop1 -->
+    <Property name='prop1'>value-here</Property>
+  </Properties>
+  <Source>
+    $0
+  </Source>
+</Javascript>

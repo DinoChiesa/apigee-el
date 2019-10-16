@@ -1,0 +1,4 @@
+<AccessEntity name='##'>
+  <EntityType value='apiproduct' />
+  <EntityIdentifier type='consumerkey' ref='${1:client_id}' />
+</AccessEntity>

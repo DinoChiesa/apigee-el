@@ -1,0 +1,4 @@
+<AccessEntity name='##'>
+  <EntityType value='developer' />
+  <EntityIdentifier type='developeremail' ref='${1:request.queryparam.email}' />
+</AccessEntity>

@@ -1,0 +1,37 @@
+<AssignMessage name='AM-HMAC-AWS-1'>
+  <!-- 1 -->
+  <AssignVariable>
+    <Name>DateValue</Name>
+    <Template>{timeFormatUTCMs('yyyyMMdd',system.timestamp)}</Template>
+  </AssignVariable>
+  <!-- 2 -->
+  <AssignVariable>
+    <Name>FirstKey</Name>
+    <Template>AWS4{private.secret_aws_access_key}</Template>
+  </AssignVariable>
+  <!-- 3 -->
+  <AssignVariable>
+    <Name>DateKey</Name>
+    <Template>{hmacSha256(FirstKey,DateValue,'utf-8','base16')}</Template>
+  </AssignVariable>
+  <!-- 4 -->
+  <AssignVariable>
+    <Name>DateRegionKey</Name>
+    <Template>{hmacSha256(DateKey,aws_region,'base16','base16')}</Template>
+  </AssignVariable>
+  <!-- 5 -->
+  <AssignVariable>
+    <Name>DateRegionServiceKey</Name>
+    <Template>{hmacSha256(DateRegionKey,aws_service,'base16','base16')}</Template>
+  </AssignVariable>
+  <!-- 6 -->
+  <AssignVariable>
+    <Name>SigningKey</Name>
+    <Template>{hmacSha256(DateRegionServiceKey,'aws4_requst','base16','base16')}</Template>
+  </AssignVariable>
+  <!-- 7 -->
+  <AssignVariable>
+    <Name>aws4_hmac_value</Name>
+    <Template>{hmacSha256(SigningKey,stringToSign,'base16','base16')}</Template>
+  </AssignVariable>
+</AssignMessage>

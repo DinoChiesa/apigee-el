@@ -1,0 +1,11 @@
+<VerifyJWS name="##">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Source>request.formparam.input</Source>
+  <Algorithms>
+    <Key>A128KW</Key>
+    <Content>A128GCM</Content>
+  </Algorithms>
+  <SecretKey>
+    <Value ref='private.secretkey'/>
+  </SecretKey>
+</VerifyJWS>
