@@ -1,33 +1,41 @@
-/* jshint esversion: 8 */
+/* jshint esversion: 8, node:true, strict:implied */
 /* global process */
 
 const http = require('http');
 const url = require('url');
+const util = require('util');
 
-console.log('node.js application starting...');
-console.log(process.env);
+function logWrite() {
+  let time = (new Date()).toString(),
+      tstr = '[' + time.substr(11, 4) + '-' +
+    time.substr(4, 3) + '-' + time.substr(8, 2) + ' ' +
+    time.substr(16, 8) + '] ';
+  console.log(tstr + util.format.apply(null, arguments));
+}
 
-const svr = http.createServer(function(req, resp) {
+logWrite('node.js application starting...');
+
+function requestHandler(req, resp) {
   let query = url.parse(req.url, true).query;
-
-  console.log(req.method, req.url);
-
+  logWrite(req.method, req.url);
   resp.setHeader("Content-Type", "application/json");
   resp.end(JSON.stringify({
     date: new Date(),
     inboundUrl : req.url,
     msg: 'Hello, ' + (query.name || 'World') + '!'
   }));
-});
+}
+
+const svr = http.createServer(requestHandler);
 
 process.on('exit', function (code) {
-   console.log('Script terminating with code %s', code);
+logWrite('Script terminating with code %s', code);
 });
 
 process.on('uncaughtException', function (err) {
-    console.log(err.stack);
+    logWrite(err.stack);
 });
 
 svr.listen(process.env.PORT || 3000, function() {
-  console.log('Node HTTP server is listening');
+  logWrite('Node HTTP server is listening');
 });
