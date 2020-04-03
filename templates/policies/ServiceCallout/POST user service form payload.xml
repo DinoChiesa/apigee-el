@@ -1,5 +1,5 @@
 <ServiceCallout name='##'>
-  <Request>
+  <Request variable='myrequestvariable'>
     <Set>
      <Headers>
        <Header name='content-type'>application/x-www-form-urlencoded</Header>
