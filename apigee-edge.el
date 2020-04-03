@@ -1,17 +1,17 @@
 ;;; apigee-edge.el --- utility functions for working with Apigee Edge platform in emacs
 ;;
-;; Copyright (C) 2017 Dino Chiesa and Google, Inc.
+;; Copyright (C) 2017-2020 Dino Chiesa and Google, LLC.
 ;;
 ;; Author     : Dino Chiesa
 ;; Maintainer : Dino Chiesa <dchiesa@google.com>
 ;; Created    : May 2017
-;; Modified   : June 2017
-;; Version    : 1.0
+;; Modified   : April 2020
+;; Version    : 1.1
 ;; Keywords   : apigee edge
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2019-August-22 15:11:37>
+;; Last-saved : <2020-April-02 17:33:18>
 ;;
 ;;; Commentary:
 ;;
@@ -43,7 +43,7 @@
 ;;
 ;;; License
 ;;
-;;    Copyright 2017 Google Inc.
+;;    Copyright 2017-2020 Google LLC.
 ;;
 ;;    Licensed under the Apache License, Version 2.0 (the "License");
 ;;    you may not use this file except in compliance with the License.
@@ -414,11 +414,54 @@ Within each of those, there will be templates for those entities.
               (selected-window)))
     t))
 
+(defun edge--find-bundle (flavor) ;; "apiproxy" or "sharedflowbundle"
+  (let ((right-here (concat (file-name-directory default-directory) flavor)))
+    (if (edge--is-existing-directory right-here)
+        (file-name-directory default-directory)
+      (let ((elts (reverse (split-string (file-name-directory default-directory) "/")))
+            r)
+        (while (and elts (not r))
+          (if (string= (car elts) flavor)
+              (setq r (reverse (cdr elts)))
+            (setq elts (cdr elts))))
+        (if r
+            (list (mapconcat 'identity r "/") flavor ))))))
+
+(defun edge--type-of-bundle ()
+  "returns \"apiproxy\" or \"sharedflowbundle\", or nil"
+  (cadr (cl-some 'edge--find-bundle '("apiproxy" "sharedflowbundle"))))
+
+(defun edge--root-path-of-bundle ()
+  "Returns the path of the directory that contains the
+apiproxy directory.
+
+If the apiproxy is defined in a structure like this:
+
+~/foo/bar/APINAME/apiproxy
+~/foo/bar/APINAME/apiproxy/APINAME.xml
+~/foo/bar/APINAME/apiproxy/resources
+~/foo/bar/APINAME/apiproxy/resources/...
+~/foo/bar/APINAME/apiproxy/targets
+~/foo/bar/APINAME/apiproxy/targets/..
+~/foo/bar/APINAME/apiproxy/proxies
+~/foo/bar/APINAME/apiproxy/proxies/..
+..
+
+... and this function is invoked from anywhere in one of those directories,
+then the return value is: ~/foo/bar/APINAME/
+
+It always ends in slash.
+
+"
+    (let ((path
+           (edge--insure-trailing-slash
+            (car (cl-some 'edge--find-bundle '("apiproxy" "sharedflowbundle"))))))
+      (and path (file-truename path))))
 
 (defun edge--target-name-is-available (tname)
   "is a target by this name available? Eg, does a file NOT exist with this name?"
   (let ((filename-to-check
-         (concat (edge--path-of-apiproxy) "apiproxy/targets/" tname ".xml")))
+         (concat (edge--root-path-of-bundle) "apiproxy/targets/" tname ".xml")))
     (not (file-exists-p filename-to-check))))
 
 
@@ -440,7 +483,7 @@ Based on file availability."
 choose a target type to insert.
 "
   (interactive)
-  (let ((apiproxy-dir (edge--path-of-apiproxy))
+  (let ((apiproxy-dir (edge--root-path-of-bundle))
         (template-name
            (ido-completing-read
             (format "target template: ")
@@ -575,42 +618,7 @@ of available policies.
       (car attrs)
       (not (stringp (car attrs)))))))
 
-(defun edge--path-of-apiproxy ()
-  "Returns the path of the directory that contains the
-apiproxy directory.
 
-If the apiproxy is defined in a structure like this:
-
-~/dev/apiproxies/APINAME/apiproxy
-~/dev/apiproxies/APINAME/apiproxy/APINAME.xml
-~/dev/apiproxies/APINAME/apiproxy/resources
-~/dev/apiproxies/APINAME/apiproxy/resources/...
-~/dev/apiproxies/APINAME/apiproxy/targets
-~/dev/apiproxies/APINAME/apiproxy/targets/..
-~/dev/apiproxies/APINAME/apiproxy/proxies
-~/dev/apiproxies/APINAME/apiproxy/proxies/..
-..
-
-... and this function is invoked from anywhere in one of those directories,
-then the return value is: ~/dev/apiproxies/APINAME/
-
-It always ends in slash.
-
-"
-  (let ((path
-         (edge--insure-trailing-slash
-          (let ((maybe-this (concat (file-name-directory default-directory) "apiproxy")))
-            (if (edge--is-existing-directory maybe-this)
-                (file-name-directory default-directory)
-              (let ((elts (reverse (split-string (file-name-directory default-directory) "/")))
-                    r)
-                (while (and elts (not r))
-                  (if (string= (car elts) "apiproxy")
-                      (setq r (reverse (cdr elts)))
-                    (setq elts (cdr elts))))
-                (if r
-                    (mapconcat 'identity r "/") )))))))
-    (and path (file-truename path))))
 
 
 (defun edge--fixup-script-name (name &optional prefix)
@@ -631,7 +639,7 @@ or resources/py, or resources/xsl."
 if no file exists by that name in the given proxy.
 "
   (let ((filename-to-check
-         (concat (edge--path-of-apiproxy) "apiproxy/policies/" pname ".xml")))
+         (concat (edge--root-path-of-bundle) (edge--type-of-bundle) "/policies/" pname ".xml")))
     (not (file-exists-p filename-to-check))))
 
 (defun edge--suggested-policy-name (ptype filename)
@@ -662,14 +670,15 @@ appropriate.
 
 "
   (interactive)
-  (let ((apiproxy-dir (edge--path-of-apiproxy))
+  (let ((bundle-dir (edge--root-path-of-bundle))
+        (bundle-type (edge--type-of-bundle))
         (choice (edge--prompt-user-with-policy-choices)))
     (when choice
       (let ((num-items (length choice)))
         (when (eq num-items 2)
           ;; policy-type (nth 0 choice)
           ;; template-file (nth 1 choice)
-          (let ((policy-dir (concat apiproxy-dir "apiproxy/policies/"))
+          (let ((policy-dir (concat bundle-dir bundle-type "/policies/"))
                 (ptype (symbol-name (nth 0 choice)))
                 (template-filename (nth 1 choice))
                 (have-name nil)
@@ -708,7 +717,7 @@ appropriate.
                             (resource-basename (match-string-no-properties 2)))
                         (if resource-basename
                             (let ((resource-dir
-                                   (concat apiproxy-dir "apiproxy/resources/" resource-type "/")))
+                                   (concat bundle-dir bundle-type "/resources/" resource-type "/")))
                               (and (not (file-exists-p resource-dir))
                                    (make-directory resource-dir t))
                               (find-file-other-window (concat resource-dir resource-basename))
@@ -883,7 +892,7 @@ changing names and replacing / expanding things as appropriate."
                (display-name-elt (car (xml-get-children sfbundle-elt 'DisplayName))))
             (setcdr (assq 'name sfbundle-elt-attrs) sf-name)
             (setcar (cddr display-name-elt) sf-name)
-            (funcall serialize-xml-elt root))
+            (edge--serialize-xml-elt root))
           (save-buffer))))
     (edge--copy-subdirs (list "sharedflows" "policies") source-sf-dir dest-sf-dir)))
 
