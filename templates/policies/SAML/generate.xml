@@ -1,0 +1,28 @@
+<GenerateSAMLAssertion name="SAML" ignoreContentType="false">
+
+  <SignatureAlgorithm>${1:$$(yas-choose-value (list "SHA1" "SHA256"))}</SignatureAlgorithm>
+  <CanonicalizationAlgorithm></CanonicalizationAlgorithm>
+
+  <Issuer ref="reference">Issuer name</Issuer>
+
+  <KeyStore>
+    <Name ref="reference">keystorename</Name>
+    <Alias ref="reference">alias</Alias>
+  </KeyStore>
+
+  <OutputVariable>
+    <FlowVariable>assertion.content</FlowVariable>
+    <Message name="request">
+      <Namespaces>
+        <Namespace prefix="test">http://www.example.com/test</Namespace>
+      </Namespaces>
+      <XPath>/envelope/header</XPath>
+    </Message>
+  </OutputVariable>
+  <Subject ref="reference">Subject name</Subject>
+  <Template ignoreUnresolvedVariables="false"><![CDATA[
+    A lot of XML goes here, in CDATA, with {} around
+         each variable
+  ]]>
+  </Template>
+</GenerateSAMLAssertion>

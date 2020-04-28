@@ -1,4 +1,5 @@
-<OAuthV2 name="OAuthV2.GenerateAccessToken" continueOnError="false">
+<OAuthV2 name="##" continueOnError="false">
+  <Description>OAuthV2-GenerateAccessToken-CC</Description>
   <Operation>GenerateAccessToken</Operation>
   <Scope>request.formparam.scope</Scope>
   <!--

@@ -1,0 +1,14 @@
+<ServiceCallout name="##">
+  <Request clearPayload="false" variable="scMessage">
+    <Set>
+      <Verb>${1:$$(yas-choose-value (list "GET" "POST" "PUT"))}</Verb>
+      <!-- {basepath}/{pathsuffix} -->
+      <Path>/foo/bar/bam</Path>
+    </Set>
+  </Request>
+  <Response>scResponse</Response>
+  <LocalTargetConnection>
+    <APIProxy>localProxy</APIProxy>
+    <ProxyEndpoint>${2:$$(yas-choose-value (list "default" "endpoint1"))}</ProxyEndpoint>
+  </LocalTargetConnection>
+</ServiceCallout>

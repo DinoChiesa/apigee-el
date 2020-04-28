@@ -1,3 +1,15 @@
-<GetOAuthV2Info name='##'>
+<GetOAuthV2Info name='##' continueOnError='false'>
   <AccessToken ref="${1:extracted.access_token}"></AccessToken>
+  <!-- will work even if the token is expired -->
+  <IgnoreAccessTokenStatus>true</IgnoreAccessTokenStatus>
+  <!--
+populates variables like
+
+oauthv2accesstoken.OAuthV2-GetTokenAttributes.status
+oauthv2accesstoken.OAuthV2-GetTokenAttributes.access_token
+oauthv2accesstoken.OAuthV2-GetTokenAttributes.expires_in
+oauthv2accesstoken.OAuthV2-GetTokenAttributes.accesstoken.CUSTOM_ATTR
+...
+-->
+
 </GetOAuthV2Info>

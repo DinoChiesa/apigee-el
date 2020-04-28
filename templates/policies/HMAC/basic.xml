@@ -1,0 +1,6 @@
+<HMAC name="##">
+    <Algorithm>SHA-256</Algorithm>
+    <Message ref="variable_containing_message">abc</Message>
+    <SecretKey ref="private.secretkey"/>
+    <Output>hmac_value</Output>
+</HMAC>

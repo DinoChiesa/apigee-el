@@ -1,0 +1,12 @@
+<ValidateSAMLAssertion name="##" ignoreContentType="false">
+  <Source name="request">
+    <Namespaces>
+      <Namespace prefix='soap'>http://schemas.xmlsoap.org/soap/envelope/</Namespace>
+      <Namespace prefix='wsse'>http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd</Namespace>
+      <Namespace prefix='saml'>urn:oasis:names:tc:SAML:2.0:assertion</Namespace>
+    </Namespaces>
+    <XPath>/soap:Envelope/soap:Header/wsse:Security/saml:Assertion</XPath>
+  </Source>
+  <TrustStore>TrustStoreName</TrustStore>
+  <RemoveAssertion>false</RemoveAssertion>
+</ValidateSAMLAssertion>

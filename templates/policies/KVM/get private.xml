@@ -1,0 +1,9 @@
+<KeyValueMapOperations name='##' mapIdentifier='${1:secrets}'>
+  <Scope>${2:$$(yas-choose-value '(\"organization\" \"environment\" \"apiproxy\"))}</Scope>
+  <ExpiryTimeInSecs>300</ExpiryTimeInSecs>
+  <Get assignTo='${3:private.privatekey}'>
+    <Key>
+      <Parameter>rsa_private_key</Parameter>
+    </Key>
+  </Get>
+</KeyValueMapOperations>

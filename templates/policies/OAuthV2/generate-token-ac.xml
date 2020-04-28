@@ -1,4 +1,5 @@
- <OAuthV2 name="OAuthV2-GenerateAccessToken-AuthCode">
+<OAuthV2 name="##">
+  <Description>OAuthV2-GenerateAccessToken-AuthCode</Description>
   <ExternalAuthorization>false</ExternalAuthorization>
   <Operation>GenerateAccessToken</Operation>
   <!--

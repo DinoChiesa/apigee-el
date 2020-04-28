@@ -1,0 +1,24 @@
+<ServiceCallout name='##'>
+  <DisplayName>##</DisplayName>
+  <Request variable='rbacRequest'>
+        <Set>
+           <Payload contentType='application/json'>{
+    "subject":"something",
+    "verb":"{request.verb}",
+    "resource":"{proxy.pathsuffix}"
+}</Payload>
+         <Verb>POST</Verb>
+         <Path>/rbac/eval</Path>
+      </Set>
+  </Request>
+  <Response>rbacResponse</Response>
+  <HTTPTargetConnection>
+    <SSLInfo>
+        <Enabled>true</Enabled>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 3xx</Property>
+    </Properties>
+    <URL>${1:https://dchiesa-first-project.appspot.com}</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

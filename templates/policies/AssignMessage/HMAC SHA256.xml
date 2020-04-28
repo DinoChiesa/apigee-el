@@ -1,22 +1,36 @@
 <AssignMessage name="##">
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+
   <AssignVariable>
     <Name>encodedkey</Name>
-    <Value>536563726574313233</Value>
+    <Value>536563726574313233</Value> <!-- Secret123 -->
   </AssignVariable>
+
   <AssignVariable>
     <Name>payload</Name>
     <Value>abc</Value>
   </AssignVariable>
+
   <AssignVariable>
     <Name>hmac_value</Name>
     <Template>{hmacSha256(encodedkey,payload,'base16')}</Template>
   </AssignVariable>
 
   <AssignVariable>
-    <Name>expected_value</Name>
+    <Name>hmac_value</Name>
+    <Template>{toLowerCase(hmac_value)}</Template>
+  </AssignVariable>
+
+  <AssignVariable>
+    <Name>expected_value_base64</Name>
     <!-- the hmac is base64 encoded by default -->
     <!-- the equivalent base16 value is A7938720FE5749D31076E6961360364C0CD271443F1B580779932C244293BC94 -->
     <Value>p5OHIP5XSdMQduaWE2A2TAzScUQ/G1gHeZMsJEKTvJQ=</Value>
   </AssignVariable>
+
+  <AssignVariable>
+    <Name>expected_value_base16</Name>
+    <Value>a7938720fe5749d31076e6961360364c0cd271443f1b580779932c244293bc94</Value>
+  </AssignVariable>
+
 </AssignMessage>

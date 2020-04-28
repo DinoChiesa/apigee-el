@@ -1,0 +1,9 @@
+<AssignMessage name='##'>
+  <AssignTo>request</AssignTo>
+  <Set>
+    <Headers>
+      <Header name='my-header'>{foobar}</Header>
+    </Headers>
+    <Verb>GET</Verb>
+  </Set>
+</AssignMessage>

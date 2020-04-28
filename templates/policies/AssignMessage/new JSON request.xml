@@ -1,0 +1,22 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <AssignTo createNew='true' transport='http' type='request'>contrivedMessage</AssignTo>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Set>
+    <Payload contentType='application/json'>[
+  {
+    "id": "1",
+    "name": "Abhi",
+    "pan": "ABC",
+    "bg": "O+"
+  },
+  {
+    "id": "2",
+    "name": "Ashish",
+    "pan": "XYZ",
+    "bg": "AB+"
+  }
+]</Payload>
+    <Verb>POST</Verb>
+  </Set>
+</AssignMessage>

@@ -1,0 +1,22 @@
+<Javascript name='##' timeLimit='200' >
+  <Properties>
+    <Property name='target'>https://13cab3ca.ngrok.io</Property>
+  </Properties>
+  <Source>
+  function onComplete(response, error) {
+    if (response) {
+      context.setVariable('example.status', response.status);
+    }
+    else {
+      context.setVariable('example.error', 'Whoops: ' + error);
+    }
+  }
+
+  var req = new Request();
+  //req.body = '';
+  req.url = properties.target + '/oneid/' + id ;
+  req.method = 'GET';
+  req.headers = { 'ID-Index' : ix };
+  httpClient.send(req, onComplete);
+  </Source>
+</Javascript>
