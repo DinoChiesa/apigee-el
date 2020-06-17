@@ -1,6 +1,6 @@
-# apigee-edge-el
+# apigee-el
 
-Emacs elisp module for interacting with Apigee Edge, and for creating and modifying Apigee Edge assets.
+Emacs elisp module for interacting with Apigee, and for creating and modifying Apigee assets.
 
 ## Using it
 
@@ -20,7 +20,7 @@ To use this module, put this in your .emacs file:
 
 ```
  (add-to-list 'load-path "~/elisp/apigee")
- (require 'apigee-edge)
+ (require 'apigee)
 ```
 
 Then, you can invoke various commands:
@@ -45,8 +45,8 @@ To add a target to an existing proxy, open a dired buffer to ../apiproxy and:
 ## Adding templates
 
 There are some templates for proxies and policies included in the module.
-If you wish to add to that set of templates, just drop more files into the approprpiate directories. Find them at <apigee-edge-el>/templates/proxies and
-<apigee-edge-el>/templates/policies .
+If you wish to add to that set of templates, just drop more files into the approprpiate directories. Find them at <apigee-el>/templates/proxies and
+<apigee-el>/templates/policies .
 
 
 ## Extensions
@@ -64,7 +64,7 @@ Some ideas for extending this module:
 
 ## License
 
-This material is Copyright 2017 Dino Chiesa and Google Inc.
+This material is Copyright 2017-2020 Dino Chiesa and Google LLC.
 and is licensed under the [Apache 2.0 License](LICENSE). This includes the elisp code as well as any API Proxy templates.
 
 
