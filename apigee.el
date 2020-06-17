@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2020-June-17 09:56:52>
+;; Last-saved : <2020-June-17 16:19:27>
 ;;
 ;;; Commentary:
 ;;
@@ -733,6 +733,101 @@ appropriate.
               (message "yank to add the step declaration...")
               )))))))
 
+(defun apigee--is-policy-file (s)
+  "returns true if the filename represents a policy file in the current
+proxy/sharedflow bundle"
+  (and
+   (s-starts-with? (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/") s)
+   (file-exists-p s)))
+
+(defun apigee--current-policy-name ()
+  "returns the name of the current policy, if the current buffer
+is visiting a policy file. otherwise nil."
+  (let ((current-filename (buffer-file-name)))
+    (if (apigee--is-policy-file current-filename)
+       (s-chop-suffix ".xml" (car (reverse (split-string current-filename
+                                                         "/")))))))
+(defun apigee--list-policies ()
+  "returns a list of policies in the current bundle"
+  (if (apigee--root-path-of-bundle)
+      (let* ((policy-dir
+             (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/"))
+            (fq-names (apigee--sort-strings (apigee--proper-files policy-dir ".xml"))))
+        (mapcar (lambda (s) (s-chop-suffix ".xml" (car (reverse (split-string s "/")))))
+                fq-names))))
+
+(defun apigee-rename-policy ()
+  "rename a policy to a new name"
+  (interactive)
+  (let ((current-policies (apigee--list-policies))
+        (predicate-ignored nil)
+        (require-match nil)
+        (initial-input (apigee--current-policy-name))
+        (hist nil)
+        (def (apigee--current-policy-name)))
+    (let* ((name-of-policy-to-rename
+            (ido-completing-read "rename policy: " current-policies
+                                 predicate-ignored require-match initial-input hist def))
+           ;; todo: replace this. Don't need a completing read here. Just a read.
+           (new-name (read-string (format "rename '%s' to : " name-of-policy-to-rename)
+                                  name-of-policy-to-rename nil name-of-policy-to-rename)))
+
+      (if (s-equals? name-of-policy-to-rename new-name)
+          (message "nothing to do.")
+        (if (member new-name current-policies)
+            (message "there is already a policy with that name.")
+          (let* ((bundle-dir (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle)))
+                 (policy-dir (concat bundle-dir "/policies/")))
+            (let ((fq-old-fname (concat policy-dir name-of-policy-to-rename ".xml"))
+                  (fq-new-fname (concat policy-dir new-name ".xml")))
+              (message "renaming %s to %s..." name-of-policy-to-rename new-name)
+
+              (let ((re1 (concat "\\<" (regexp-quote name-of-policy-to-rename) "\\>"))
+                    (interactive-buffer-name (buffer-name))
+                    (buf-for-policy-file (get-file-buffer fq-old-fname))
+                    (count-of-changes 0)
+                    (process-one-file (lambda (one-file)
+                                        (with-current-buffer (find-file-noselect one-file)
+                                          (save-excursion
+                                            (goto-char (point-min))
+                                            (let ((made-at-least-one-change nil)
+                                                  (original-modified (buffer-modified-p)))
+                                              (while (re-search-forward re1 nil t)
+                                                (replace-match new-name)
+                                                (setq made-at-least-one-change t))
+
+                                              (if made-at-least-one-change
+                                                  (setq count-of-changes (1+ count-of-changes)))
+
+                                              (if (and made-at-least-one-change
+                                                       (not original-modified)
+                                                       (not (s-equals-p interactive-buffer-name (buffer-name))))
+                                                  (save-buffer))))))))
+
+                ;; rename the file for the policy
+                (rename-file fq-old-fname fq-new-fname)
+
+                ;; rename the buffer for the policy, if it is open
+                (if buf-for-policy-file
+                    (with-current-buffer buf-for-policy-file
+                      (rename-buffer new-name t) ;; get unique buffer name
+                      (set-visited-file-name fq-new-fname) ;; sets modified flag t
+                      (set-buffer-modified-p nil)))
+
+                ;; modify the policy file itself
+                (funcall process-one-file fq-new-fname)
+
+                ;; modify all references to this policy
+                (dolist (dir
+                         (mapcar (lambda (s) (concat bundle-dir "/" s))
+                                 (list "targets" "proxies" "sharedflows")))
+                  (if (file-exists-p dir)
+                      (dolist (one-file (apigee--proper-files dir ".xml"))
+                        ;; edit the file to replace
+                        (funcall process-one-file one-file))))
+                (message "made %d changes" count-of-changes)))))))))
+
+
 ;; (defun apigee-maybe-sync-policy-filename ()
 ;;   "synchronizes the name of the file with the name specified in the name
 ;; attribute in the root element, if the file is a policy file.
@@ -1033,7 +1128,6 @@ PROMPT-ARG - whether invoked with a prefix
          (apigee-load-templates apigee--base-template-dir))
      (setq apigee-timer
            (run-with-timer (* 60 apigee--timer-minutes) (* 60 apigee--timer-minutes) 'apigee--persist-state))))
-
 
 (provide 'apigee)
 
