@@ -4,6 +4,6 @@
     <!-- to retrieve properties in js code:   properties.prop1 -->
     <Property name='prop1'>value-here</Property>
   </Properties>
-  <IncludeURL>jsc://settings.js</IncludeURL> 
+  <IncludeURL>jsc://settings.js</IncludeURL>
   <ResourceURL>jsc://readSettings.js</ResourceURL>
 </Javascript>

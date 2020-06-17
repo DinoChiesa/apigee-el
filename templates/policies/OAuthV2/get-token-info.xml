@@ -5,10 +5,10 @@
   <!--
 populates variables like
 
-oauthv2accesstoken.OAuthV2-GetTokenAttributes.status
-oauthv2accesstoken.OAuthV2-GetTokenAttributes.access_token
-oauthv2accesstoken.OAuthV2-GetTokenAttributes.expires_in
-oauthv2accesstoken.OAuthV2-GetTokenAttributes.accesstoken.CUSTOM_ATTR
+oauthv2accesstoken.##.status
+oauthv2accesstoken.##.access_token
+oauthv2accesstoken.##.expires_in
+oauthv2accesstoken.##.accesstoken.CUSTOM_ATTR
 ...
 -->
 

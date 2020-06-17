@@ -10,5 +10,5 @@
      <TrustStore>ref://${2:truststore-ref}</TrustStore>
   </SSLInfo>
   <IncludeURL>jsc://URI.js</IncludeURL> <!-- optionally specify a shared resource here -->
-  <ResourceURL>jsc://${3:$$(edge--fixup-script-name \"##\" \"JS\")}.js</ResourceURL>
+  <ResourceURL>jsc://${3:$$(apigee--fixup-script-name \"##\" \"JS\")}.js</ResourceURL>
 </Javascript>

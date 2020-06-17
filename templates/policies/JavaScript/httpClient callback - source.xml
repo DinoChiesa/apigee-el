@@ -12,11 +12,9 @@
     }
   }
 
-  var req = new Request();
-  //req.body = '';
-  req.url = properties.target + '/oneid/' + id ;
-  req.method = 'GET';
-  req.headers = { 'ID-Index' : ix };
+  var url = properties.target + '/oneid/' + id ;
+  var headers = { 'ID-Index' : ix };
+  var req = new Request(url, 'GET', headers);
   httpClient.send(req, onComplete);
   </Source>
 </Javascript>
