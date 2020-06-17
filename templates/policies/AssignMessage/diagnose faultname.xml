@@ -1,0 +1,7 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Ref>fault.name</Ref>
+  </AssignVariable>
+</AssignMessage>

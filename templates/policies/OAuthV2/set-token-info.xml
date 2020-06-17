@@ -1,0 +1,6 @@
+<SetOAuthV2Info name='##' continueOnError='false'>
+  <AccessToken ref="${1:extracted.access_token}"></AccessToken>
+ <Attributes>
+   <Attribute name="username">test</Attribute>
+ </Attributes>
+</SetOAuthV2Info>

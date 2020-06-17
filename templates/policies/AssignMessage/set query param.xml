@@ -1,0 +1,7 @@
+<AssignMessage name='##'>
+  <Set>
+    <QueryParams>
+      <QueryParam name='${1:outgoingParamName}'>{apiproduct.custom_attr_name}</QueryParam>
+    </QueryParams>
+  </Set>
+</AssignMessage>
