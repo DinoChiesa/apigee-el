@@ -1,0 +1,12 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <AssignVariable>
+    <Name>composite</Name>
+    <Template>{username}:{password}</Template>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>encoded</Name>
+    <Template>{encodeBase64(composite)}</Template>
+  </AssignVariable>
+</AssignMessage>

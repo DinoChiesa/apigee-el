@@ -10,8 +10,8 @@
 ;; Keywords   : apigee
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
-;; X-URL      : https://github.com/DinoChiesa/unknown...
-;; Last-saved : <2020-June-17 16:19:27>
+;; X-URL      : https://github.com/DinoChiesa/apigee-el
+;; Last-saved : <2020-June-17 17:11:56>
 ;;
 ;;; Commentary:
 ;;
@@ -62,7 +62,7 @@
 
 (require 's) ;; magnars' long lost string library
 (require 'xml)
-(require 'dash) ;; magnars' functional lib
+(require 'dash) ;; magnars' functional lib, functions start with dash
 
 (defvar apigee--base-template-dir nil
   "The directory from which policy templates have been most recently loaded")

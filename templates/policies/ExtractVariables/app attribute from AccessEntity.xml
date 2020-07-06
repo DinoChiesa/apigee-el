@@ -6,7 +6,8 @@
       <XPath>/App/Attributes/Attribute[Name='DisplayName']/Value/text()</XPath>
     </Variable>
     <Variable name='extracted_consumer_secret' type='string'>
-      <!-- not sure this will actually work - is the XPath a MessageTemplate ?  -->
+      <!-- the following will not work unless you explicitly provide the client_id. -->
+      <!-- the XPath text is not evaluated as a MessageTemplate.  -->
       <XPath>/App/Credentials/Credential[ConsumerKey='{client_id}']/ConsumerSecret/text()</XPath>
     </Variable>
     <Variable name='${2:varname2}' type='string'>

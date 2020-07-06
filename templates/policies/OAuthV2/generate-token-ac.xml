@@ -8,7 +8,13 @@
       2400000 = 40 minutes
       3600000 = 60 minutes
   -->
-  <ExpiresIn ref='flow.variable'>2400000</ExpiresIn>
+  <ExpiresIn ref='flow.variable'>1800000</ExpiresIn>
+    <!--
+    RefreshTokenExpiresIn, in milliseconds.
+      691200000 = 8 days
+      2592000000 = 30 days
+    -->
+    <RefreshTokenExpiresIn>691200000</RefreshTokenExpiresIn>
 
   <SupportedGrantTypes>
     <GrantType>authorization_code</GrantType>
