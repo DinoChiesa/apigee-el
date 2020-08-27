@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2020-June-17 17:11:56>
+;; Last-saved : <2020-August-27 06:49:29>
 ;;
 ;;; Commentary:
 ;;
@@ -620,9 +620,6 @@ of available policies.
       (car attrs)
       (not (stringp (car attrs)))))))
 
-
-
-
 (defun apigee--fixup-script-name (name &optional prefix)
   "returns a stripped name suitable for use for a file in the resources/jsc directory,
 or resources/py, or resources/xsl."
@@ -729,7 +726,7 @@ appropriate.
                (t nil))
               (kill-new policy-name)
               (kill-new
-               (concat "<Step><Name>" policy-name "</Name></Step>"))
+               (concat "        <Step>\n          <Name>" policy-name "</Name>\n        </Step>\n"))
               (message "yank to add the step declaration...")
               )))))))
 
@@ -1018,15 +1015,19 @@ CONTAINING-DIR - name of an existing directory into which to insert the new asse
     (find-file-existing new-dir)))
 
 (defun apigee--fresh-recent-asset-homes (with-time)
-  "returns the list of recently used asset homes, eliminating stale entries, in sorted order.
-If WITH-TIME is non-nil, emit the list with time (suitable for persisting). Otherwise without -
-it will be a bare list of strings representing directory paths."
+  "returns the list of recently used asset homes, eliminating stale entries
+and non-existent directories, in sorted order.  If WITH-TIME is non-nil, emit
+the list with time (suitable for persisting). Otherwise without - it will be a
+bare list of strings representing directory paths, suitable for use within an
+`ido-completing-read'."
   (let ((result
          (let ((days-considered-stale 30))
            (-sort (lambda (a b)
                     (> (float-time (time-subtract (apply 'encode-time (cadr a)) (apply 'encode-time (cadr b)))) 0))
                   (-filter (lambda (x)
-                             (apigee--time-is-within-days (apply 'encode-time (cadr x)) days-considered-stale))
+                             (and
+                              (apigee--is-existing-directory (car x))
+                              (apigee--time-is-within-days (apply 'encode-time (cadr x)) days-considered-stale)))
                            apigee--recently-used-asset-homes)))))
     (if with-time result
       (-map (lambda (n) (car n)) result))))
@@ -1037,13 +1038,19 @@ it will be a bare list of strings representing directory paths."
     (< (float-time (time-subtract (current-time) the-time)) delta-seconds)))
 
 (defun apigee--prompt-for-containing-dir ()
-  "prompt user for a containing directory, and return it."
+  "prompt user for a containing directory, and return it. Create the directory
+if necessary."
   (let ((homedir (concat (getenv "HOME") "/"))
-        (candidate-list (apigee--fresh-recent-asset-homes nil)))
-    (ido-completing-read
-     "containing directory?: "
-     (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
-             (delq nil (delete-dups candidate-list))) nil nil nil)))
+        (candidate-list (cons default-directory (apigee--fresh-recent-asset-homes nil))))
+    (let ((containing-dir
+           (ido-completing-read
+            "containing directory?: "
+            (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
+                    (delq nil (delete-dups candidate-list))) nil nil nil)))
+          (and (not (file-exists-p containing-dir))
+               (make-directory containing-dir t))
+          containing-dir)))
+
 
 (defun apigee-new-proxy (arg)
   "Interactive fn that creates a new exploded proxy bundle directory
@@ -1083,7 +1090,6 @@ directory. If no directory has ever been used, it prompts for the directory.
         (-remove (lambda (x)  (equal (car x) containing-dir)) apigee--recently-used-asset-homes))
   (setq apigee--recently-used-asset-homes (cons (list containing-dir (decode-time nil t))
                                               apigee--recently-used-asset-homes)))
-
 
 (defun apigee--new-asset (asset-type prompt-arg)
   "Internal interactive fn that creates a new exploded asset directory
