@@ -1,0 +1,8 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <AssignVariable>
+    <Name>uuid</Name>
+    <Template>{createUuid()}</Template>
+  </AssignVariable>
+</AssignMessage>

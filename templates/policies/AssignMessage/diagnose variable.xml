@@ -1,0 +1,9 @@
+<AssignMessage name='AM-ExposeVariable'>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{request.queryparam.UTC}</Template>
+  </AssignVariable>
+
+</AssignMessage>

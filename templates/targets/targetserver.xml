@@ -12,11 +12,15 @@
     <Flows/>
     <HTTPTargetConnection>
         <Properties/>
-        <SSLInfo>
-          <Enabled>true</Enabled>
-          <CommonName wildcardMatch="false">buoyant-climate-208500.appspot.com</CommonName>
-          <TrustStore>ref://myTrustStoreRef</TrustStore>
-        </SSLInfo>
-        <URL>https://buoyant-climate-208500.appspot.com</URL>
+        <LoadBalancer>
+          <Algorithm>Weighted</Algorithm>
+          <Server name="target1">
+            <Weight>1</Weight>
+          </Server>
+          <Server name="target2">
+            <Weight>2</Weight>
+          </Server>
+        </LoadBalancer>
+        <Path>/test</Path>
     </HTTPTargetConnection>
 </TargetEndpoint>

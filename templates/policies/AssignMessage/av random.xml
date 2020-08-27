@@ -1,0 +1,8 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <AssignVariable>
+    <Name>random</Name>
+    <Template>{randomLong(${1:min},${2:max})}</Template>
+  </AssignVariable>
+</AssignMessage>
