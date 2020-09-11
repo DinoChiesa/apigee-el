@@ -1,5 +1,5 @@
 <XMLToJSON name='##'>
-  <Source>${1:$$(yas-choose-value '(\"request\" \"response\" ))}</Source>
+  <Source>${1:$$(yas-choose-value (list \"request\" \"response\" ))}</Source>
   <OutputVariable>${1:$(yas-text)}.content</OutputVariable>
   <Options>
     <StripLevels>3</StripLevels>

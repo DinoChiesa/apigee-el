@@ -1,7 +1,7 @@
 <VerifyAPIKey name='##'>
     <!-- created at ${1:$$(format-time-string \"%Y-%m-%dT%T%z\" (current-time) t)} -->
     <DisplayName>Verify API Key</DisplayName>
-    <APIKey ref='${2:$$(yas-choose-value '(\"request.queryparam.apikey\" \"request.header.X-Apikey\"))}'/>
+    <APIKey ref='${2:$$(yas-choose-value (list \"request.queryparam.apikey\" \"request.header.X-Apikey\"))}'/>
 <!--
 Variables populated by this policy: verifyapikey.{policy_name}.
 

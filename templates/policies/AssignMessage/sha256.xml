@@ -1,0 +1,12 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{sha256Hex(variable_here)}</Template>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>assigned</Name>
+    <Template>{sha256Base64(variable_here)}</Template>
+  </AssignVariable>
+</AssignMessage>

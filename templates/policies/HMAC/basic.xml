@@ -1,6 +1,6 @@
 <HMAC name="##">
-    <Algorithm>SHA-256</Algorithm>
-    <Message ref="variable_containing_message">abc</Message>
-    <SecretKey ref="private.secretkey"/>
-    <Output>hmac_value</Output>
+    <Algorithm>${1:$$(yas-choose-value (list \"SHA-256\" \"SHA-1\"))}</Algorithm>
+    <Message>{template_for_message}</Message>
+    <SecretKey ref='${2:$$(yas-choose-value (list \"verifyapikey.VerifyAPIKey-1.client_secret\" \"private.secret_key\"))}'/>
+    <Output encoding='${3:$$(yas-choose-value (list \"base16\" \"base64\" \"base64url\"))}'>output_value</Output>
 </HMAC>

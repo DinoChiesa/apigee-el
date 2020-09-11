@@ -5,8 +5,10 @@
   <PublicKey>
     <JWKS uri="https://www.googleapis.com/oauth2/v3/certs"/>
   </PublicKey>
-  <Issuer>https://accounts.google.com</Issuer>
+  <Issuer>accounts.google.com</Issuer>
+  <!--
   <AdditionalClaims>
     <Claim name='scope'>urn://www.apigee.com/apis/forever</Claim>
   </AdditionalClaims>
+  -->
 </VerifyJWT>

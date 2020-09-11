@@ -1,26 +1,41 @@
 <TargetEndpoint name="##">
-    <Description/>
-    <FaultRules/>
-    <PreFlow name="PreFlow">
-        <Request/>
-        <Response/>
-    </PreFlow>
-    <PostFlow name="PostFlow">
-        <Request/>
-        <Response/>
-    </PostFlow>
-    <Flows/>
-    <HTTPTargetConnection>
-        <Properties/>
-        <LoadBalancer>
-          <Algorithm>Weighted</Algorithm>
-          <Server name="target1">
-            <Weight>1</Weight>
-          </Server>
-          <Server name="target2">
-            <Weight>2</Weight>
-          </Server>
-        </LoadBalancer>
-        <Path>/test</Path>
-    </HTTPTargetConnection>
+  <Description/>
+  <FaultRules/>
+  <PreFlow name="PreFlow">
+    <Request/>
+    <Response/>
+  </PreFlow>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response/>
+  </PostFlow>
+  <Flows/>
+  <HTTPTargetConnection>
+    <Properties/>
+    <LoadBalancer>
+      <Algorithm>Weighted</Algorithm> <!-- or RoundRobin -->
+      <Server name="target1">
+        <Weight>1</Weight>
+      </Server>
+      <Server name="target2">
+        <Weight>2</Weight>
+      </Server>
+      <MaxFailures>2</MaxFailures>
+      <ServerUnhealthyResponse>
+        <ResponseCode>503</ResponseCode>
+        <ResponseCode>502</ResponseCode>
+        <!-- ... -->
+      </ServerUnhealthyResponse>
+    </LoadBalancer>
+
+    <HealthMonitor>
+      <IsEnabled>true</IsEnabled>
+      <IntervalInSec>5</IntervalInSec>
+      <TCPMonitor>
+        <ConnectTimeoutInSec>10</ConnectTimeoutInSec>
+      </TCPMonitor>
+    </HealthMonitor>
+
+
+  </HTTPTargetConnection>
 </TargetEndpoint>

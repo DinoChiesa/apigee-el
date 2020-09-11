@@ -1,7 +1,7 @@
 <PopulateCache name='##'>
   <CacheResource>${1:ApigeeCache}</CacheResource>
   <Source>${2:variable.containing.value}</Source>
-  <Scope>${3:$$(yas-choose-value '(\"Global\" \"Application\" \"Proxy\" \"Target\" \"Exclusive\"))}</Scope>
+  <Scope>${3:$$(yas-choose-value (list \"Global\" \"Application\" \"Proxy\" \"Target\" \"Exclusive\"))}</Scope>
   <CacheKey>
       <!--  <Prefix>fixedPrefix</Prefix> -->
     <KeyFragment ref='${4:variable.containing.keyfrag}' />

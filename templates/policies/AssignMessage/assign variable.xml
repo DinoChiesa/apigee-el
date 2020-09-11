@@ -2,12 +2,12 @@
   <DisplayName>##</DisplayName>
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <AssignVariable>
-    <Name>timeFormatString1</Name>
-    <Value>yyyyMMdd HH:mm:ss.SSS</Value> <!-- EEEE -->
+    <Name>formatString1</Name>
+    <Value>yyyy-MM-dd HH:mm:ss.SSS</Value> <!-- EEEE -->
   </AssignVariable>
   <AssignVariable>
-    <Name>assigned</Name>
-    <Template>{timeFormatUTCMs(timeFormatString1,system.timestamp)}</Template>
+    <Name>formattedTime</Name>
+    <Template>{timeFormatUTCMs(formatString1,client.received.end.timestamp)}</Template>
   </AssignVariable>
   <AssignVariable>
     <Name>assigned</Name>
