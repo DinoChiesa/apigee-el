@@ -1,0 +1,10 @@
+<KeyValueMapOperations name='##'>
+  <Scope>${1:$$(yas-choose-value '(\"organization\" \"environment\" \"apiproxy\"))}</Scope>
+  <MapName ref="${2:flow.variable}">${3:fixedNameOfMap}</MapName>
+  <ExpiryTimeInSecs>300</ExpiryTimeInSecs>
+  <Get assignTo='${4:variable.to.set}' index='2'>
+    <Key>
+      <Parameter ref='${5:variable.containing.key}'/>
+    </Key>
+  </Get>
+</KeyValueMapOperations>

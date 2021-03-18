@@ -1,0 +1,28 @@
+<Javascript name='##' timeLimit='200' >
+  <Properties>
+    <Property name='target'>https://13cab3ca.ngrok.io</Property>
+  </Properties>
+  <Source>
+  function onComplete(response, error) {
+    if (response) {
+      context.setVariable('example.status', response.status);
+    }
+    else {
+      context.setVariable('example.error', 'Whoops: ' + error);
+    }
+  }
+
+  var payload = JSON.stringify({
+     foo : 'bar',
+     whatever : 1234
+  });
+  var headers = {
+        'Content-Type' : 'application/json',
+        'Authorization' : 'Bearer xyz'
+      };
+  var url = 'https://example.com/path2';
+  var req = new Request(url, 'POST', headers, payload);
+
+  httpClient.send(req, onComplete);
+  </Source>
+</Javascript>

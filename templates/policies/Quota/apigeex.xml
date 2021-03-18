@@ -1,0 +1,6 @@
+<Quota name='##'>
+   <Identifier ref='${1:client_id}'/>
+   <UseQuotaConfigInAPIProduct stepName="${2:VerifyAPIKey-1}"/>
+   <Distributed>true</Distributed>
+   <Synchronous>false</Synchronous>
+</Quota>

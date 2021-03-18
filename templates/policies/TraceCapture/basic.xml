@@ -1,0 +1,8 @@
+<TraceCapture name="##">
+  <Variables>
+    <Variable name="${1:VariableName}" ref="${2:flowVariableName}">${3:defaultValue}</Variable>
+    <Variable name="${4:VariableName}" ref="${5:flowVariableName}">${6:defaultValue}</Variable>
+  </Variables>
+  <IgnoreUnresolvedVariables>${7:$$(yas-choose-value '(\"true\" \"false\" ))}</IgnoreUnresolvedVariables>
+  <ThrowExceptionOnLimit>false</ThrowExceptionOnLimit>
+</TraceCapture>

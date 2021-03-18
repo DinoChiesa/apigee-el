@@ -21,7 +21,7 @@
     <Response>
     </Response>
   </PostFlow>
-  <PostClientFlow name='PostFlow'>
+  <PostClientFlow name='PostClientFlow'>
     <Request>
     </Request>
     <Response>

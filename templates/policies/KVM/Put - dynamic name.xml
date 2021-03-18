@@ -1,0 +1,12 @@
+<KeyValueMapOperations name='##'>
+  <Scope>${1:$$(yas-choose-value '(\"organization\" \"environment\" \"apiproxy\"))}</Scope>
+  <MapName ref="${2:flow.variable}">${3:fixedNameOfMap}</MapName>
+  <Put override='true'>
+    <Key>
+      <Parameter ref='${4:variable.containing.key}'/>
+    </Key>
+    <Value ref='${5:variable.containing.value.to.store}'/>
+    <Value ref='${6:another.variable.with.a.value.to.store}'/>
+  </Put>
+  <ExpiryTimeInSecs>10</ExpiryTimeInSecs>
+</KeyValueMapOperations>

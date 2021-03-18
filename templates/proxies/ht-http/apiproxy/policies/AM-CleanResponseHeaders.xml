@@ -1,4 +1,6 @@
 <AssignMessage name='AM-CleanResponseHeaders'>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo>response</AssignTo>
   <Remove>
     <Headers>
       <Header name='Accept'/>
@@ -14,6 +16,9 @@
       <Header name='X-Powered-By'/>
     </Headers>
   </Remove>
-  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
-  <AssignTo createNew='false' transport='http' type='response'/>
+  <Set>
+    <Headers>
+      <Header name='APIProxy'>{apiproxy.name} v{apiproxy.revision}</Header>
+    </Headers>
+  </Set>
 </AssignMessage>

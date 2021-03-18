@@ -3,4 +3,5 @@
     <Message>{template_for_message}</Message>
     <SecretKey ref='${2:$$(yas-choose-value (list \"verifyapikey.VerifyAPIKey-1.client_secret\" \"private.secret_key\"))}'/>
     <Output encoding='${3:$$(yas-choose-value (list \"base16\" \"base64\" \"base64url\"))}'>output_value</Output>
+    <VerificationValue ref='variable_name'/> <!-- optional -->
 </HMAC>

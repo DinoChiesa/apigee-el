@@ -1,0 +1,30 @@
+<AssignMessage name='##'>
+  <AssignVariable>
+    <Name>ns1</Name>
+    <!-- prefix:namespace -->
+    <Template>ns1:{actual_namespace_here}</Template>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>soap</Name>
+    <!-- this one is hard-coded -->
+    <Value>s:http://schemas.xmlsoap.org/soap/envelope/</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>path1</Name>
+    <Value>/s:Envelope/s:Body/ns1:getIDPListResponse/ns1:IDP/text()</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>extracted</Name>
+    <!--
+        pass arguments to the xpath function as _variables_:
+
+        1: query
+        2: xml document (eg, maybe request.content)
+        3...n : namespace specifiers, if any
+
+        Do not insert spaces between the variable names or parens!
+
+    -->
+    <Template>{xpath(path1,xml,soap,ns1)}</Template>
+  </AssignVariable>
+</AssignMessage>

@@ -30,6 +30,7 @@
     <Template>{hmacSha256(DateRegionServiceKey,'aws4_requst','base16','base16')}</Template>
   </AssignVariable>
   <!-- 7 -->
+  <!-- this assumes the stringToSign has already been constructed! -->
   <AssignVariable>
     <Name>aws4_hmac_value</Name>
     <Template>{hmacSha256(SigningKey,stringToSign,'base16','base16')}</Template>

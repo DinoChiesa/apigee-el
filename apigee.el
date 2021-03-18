@@ -1,17 +1,17 @@
 ;;; apigee.el --- utility functions for working with Apigee platform in emacs
 ;;
-;; Copyright (C) 2017-2020 Dino Chiesa and Google, LLC.
+;; Copyright (C) 2017-2021 Dino Chiesa and Google, LLC.
 ;;
 ;; Author     : Dino Chiesa
 ;; Maintainer : Dino Chiesa <dchiesa@google.com>
 ;; Created    : May 2017
-;; Modified   : June 2020
+;; Modified   : February 2021
 ;; Version    : 1.1
 ;; Keywords   : apigee
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2020-August-27 06:49:29>
+;; Last-saved : <2021-March-18 16:45:00>
 ;;
 ;;; Commentary:
 ;;
@@ -44,7 +44,7 @@
 ;;
 ;;; License
 ;;
-;;    Copyright 2017-2020 Google LLC.
+;;    Copyright 2017-2021 Google LLC.
 ;;
 ;;    Licensed under the Apache License, Version 2.0 (the "License");
 ;;    you may not use this file except in compliance with the License.
@@ -105,11 +105,13 @@
    '("GenerateSAMLAssertion" "SAML")
    '("ValidateSAMLAssertion" "SAML")
    '("VerifyApiKey" "VerifyApiKey")
+   '("FlowCallout" "FC")
    '("JavaCallout" "Java")
    '("JavaScript" "JS")
    '("ExtractVariables" "EV")
    '("OAuthV2" "OAuthV2")
    '("XMLToJSON" "X2J")
+   '("CORS" "CORS")
    ;; '("VerifyJWT" "JWT")
    ;; '("GenerateJWT" "JWT")
    ;; '("DecodeJWT" "JWT")
@@ -134,6 +136,7 @@
    '("500" "Server Error")
    '("501" "Not Implemented")
    '("503" "Server Busy")))
+
 
 (defconst apigee--message-payload-sample-alist
   (list

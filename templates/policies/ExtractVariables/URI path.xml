@@ -3,7 +3,8 @@
    <Source>request</Source>
    <VariablePrefix>extracted</VariablePrefix>
    <URIPath>
-      <!-- the extracted value into extracted.id -->
+      <!-- put the extracted value into extracted.id -->
+      <!-- The Pattern is matched against pathsuffix (what comes after the basepath) -->
       <Pattern ignoreCase='true'>/accounts/{id}</Pattern>
    </URIPath>
    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
