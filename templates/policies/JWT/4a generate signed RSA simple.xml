@@ -10,9 +10,8 @@
   <Audience>${4:audience-here}</Audience>
   <Id/>  <!-- optional; empty implies generate a jti -->
   <ExpiresIn>1h</ExpiresIn>
-  <!--
-      <NotBefore>2017-08-14T11:00:21-07:00</NotBefore>
-   -->
+  <NotBefore>30s</NotBefore>
+
   <AdditionalClaims>
     <Claim name='additional-claim-name'>additional-claim-value-goes-here</Claim>
   </AdditionalClaims>

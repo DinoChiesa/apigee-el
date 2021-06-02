@@ -1,7 +1,7 @@
 <OAuthV2 name="##" continueOnError="false">
   <Description>OAuthV2-GenerateAccessToken-CC</Description>
   <Operation>GenerateAccessToken</Operation>
-  <Scope>request.formparam.scope</Scope>
+
   <!--
       ExpiresIn, in milliseconds. The ref is optional. The explicitly specified
       value is the default, when the variable reference cannot be resolved.
@@ -18,11 +18,30 @@
       They will be available to the api proxy whenever the token is
       subsequently validated.
   -->
-  <Attributes>
-    <!-- If set to false, the attribute wont be delivered in the auth code response. -->
-    <Attribute name='attr_name1' ref='flow.variable1' display='true|false'>value1</Attribute>
-    <Attribute name='attr_name2' ref='flow.variable2' display='true|false'>value2</Attribute>
-  </Attributes>
 
+  <FormatAsJWT>
+    <!--
+         This policy generates signed JWT only.  No encrypted JWT.
+
+         Always adds:
+            iat
+            exp
+            client_id
+            sub
+            jti
+
+    -->
+
+    <!-- these are required -->
+    <Algorithm>...</Algorithm>
+    <PrivateKey>...</PrivateKey> <!-- either this or SecretKey is required -->
+    <SecretKey>...</SecretKey> <!-- either this or PrivateKey is required -->
+    <Audience>...</Audience>
+
+    <!-- the following are optional -->
+    <ExpiresIn>...</ExpiresIn> <!-- when present overrides toplevel ExpiresIn -->
+    <AdditionalClaims .../>
+
+  </FormatAsJWT>
   <GenerateResponse enabled="false"/>
 </OAuthV2>

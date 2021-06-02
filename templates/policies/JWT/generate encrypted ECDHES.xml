@@ -21,6 +21,7 @@
   <Audience>audience-here</Audience>
   <Id/>
   <ExpiresIn>15m</ExpiresIn>
+  <NotBefore>5m</NotBefore>
   <AdditionalClaims>
     <Claim type='map' name='custom-claim-name'>{
       "abc": {

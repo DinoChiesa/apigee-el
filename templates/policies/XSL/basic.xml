@@ -2,13 +2,14 @@
   <DisplayName>##</DisplayName>
   <Source>outboundMessageTemplate</Source>
   <OutputVariable>transformedContent</OutputVariable>
-  <ResourceURL>xsl://1.xsl</ResourceURL>
+  <ResourceURL>xsl://${1:$$(apigee--fixup-script-name \"##\" \"XSL\")}.xsl</ResourceURL>
   <!--
       Parameters are optional. reference them in the XSL as:
-      <xsl:param name="pwd" select="''"/>
-      <xsl:param name="converted" select="''"/>
+      <xsl:param name="pwd" select="'default-value-1'"/>
+      <xsl:param name="converted" select="'default-value-2'"/>
   -->
   <Parameters ignoreUnresolvedVariables='true'>
-    <Parameter name='additional' ref='additional'/>
+    <!-- use ref or value. Not sure what happens if you include both. -->
+    <Parameter name='additional' ref='variable-containing-value' value='hardcoded-value'/>
   </Parameters>
 </XSL>

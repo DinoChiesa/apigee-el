@@ -7,6 +7,12 @@
   </HTTPProxyConnection>
 
   <FaultRules/>
+  <DefaultFaultRule name="default-fault-rule">
+    <Step>
+      <Name>AM-InjectProxyVersionHeader</Name>
+    </Step>
+    <AlwaysEnforce>true</AlwaysEnforce>
+  </DefaultFaultRule>
 
   <PreFlow name="PreFlow">
     <Request/>
@@ -15,7 +21,11 @@
 
   <PostFlow name="PostFlow">
     <Request/>
-    <Response/>
+    <Response>
+      <Step>
+        <Name>AM-InjectProxyVersionHeader</Name>
+      </Step>
+    </Response>
   </PostFlow>
 
   <PostClientFlow name="PostClientFlow">
@@ -35,12 +45,6 @@
 
     <Flow name='t2'>
       <Request>
-<!--
-        <Step>
-          <Name>JS-AddFormParam</Name>
-          <Condition>request.header.content-type = "application/x-www-form-urlencoded"</Condition>
-        </Step>
--->
       </Request>
       <Response>
       </Response>

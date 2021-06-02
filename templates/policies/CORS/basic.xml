@@ -1,11 +1,11 @@
 <CORS name='##'>
   <DisplayName>##</DisplayName>
-  <AllowOrigins>{request.header.origin}</AllowOrigins>
-  <AllowMethods>GET, PUT, POST, DELETE</AllowMethods>
-  <AllowHeaders>origin, x-requested-with, accept, content-type</AllowHeaders>
+  <AllowOrigins>{request.header.origin:*}</AllowOrigins>
+  <AllowMethods>GET, PUT, POST, DELETE, OPTIONS</AllowMethods>
+  <AllowHeaders>origin, x-requested-with</AllowHeaders>
   <ExposeHeaders>*</ExposeHeaders>
   <MaxAge>1800</MaxAge>
-  <AllowCredentials>false</AllowCredentials>
+  <AllowCredentials>true</AllowCredentials>
   <GeneratePreflightResponse>true</GeneratePreflightResponse>
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
 </CORS>
