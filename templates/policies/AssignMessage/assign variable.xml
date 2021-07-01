@@ -22,6 +22,16 @@
   </AssignVariable>
 
   <AssignVariable>
+    <Name>formatString1</Name>
+    <Value>yyyyMMdd'T'HHmmss'Z'</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>x-amz-date</Name>
+    <Template>{timeFormatUTCMs(formatString1,system.timestamp)}</Template>
+    <!-- example result: 20210604T123600Z -->
+  </AssignVariable>
+
+  <AssignVariable>
     <Name>assigned</Name>
     <Template>{xeger('[0-9]{12}')}</Template>
   </AssignVariable>

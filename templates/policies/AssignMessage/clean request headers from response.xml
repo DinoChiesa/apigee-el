@@ -14,10 +14,4 @@
       <Header name='X-Forwarded-Proto'/>
     </Headers>
   </Remove>
-  <Set>
-    <Headers>
-      <Header name="apiproxy">{apiproxy.name} r{apiproxy.revision}</Header>
-    </Headers>
-  </Set>
-  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
 </AssignMessage>

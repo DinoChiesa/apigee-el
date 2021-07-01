@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2021-March-18 16:45:00>
+;; Last-saved : <2021-July-01 10:53:11>
 ;;
 ;;; Commentary:
 ;;
@@ -644,22 +644,39 @@ if no file exists by that name in the given proxy.
          (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/" pname ".xml")))
     (not (file-exists-p filename-to-check))))
 
-(defun apigee--suggested-policy-name (ptype filename)
-  "Returns a string that contains a default policy name, uses a counter
-that is indexed per policy type within each API Proxy.
-"
-  (if (or (string= ptype "JWT") (string= ptype "JWS"))
-      (let ((shortname (car (reverse (split-string filename "/")))))
-        (setq ptype (concat (s-capitalize (car (split-string shortname " "))) ptype))))
+(defun apigee--string-is-uppercase-acronym-p (str)
+  (let ((case-fold-search nil))
+    (string-match-p "\\`[-A-Z0-9]*\\'" str)))
 
-  (let ((ptype (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))
-        (val 1)
-        (next-name (lambda (v) (concat ptype "-" (format "%d" v)))))
+(defun apigee--maybe-capitalize (str)
+  "Capitalizes the string STR unless the string is an acronym like HS256 or PBES2."
+  (if (apigee--string-is-uppercase-acronym-p str) str (s-capitalize str)))
+
+(defun apigee--suggested-policy-name (ptype filename)
+  "Returns a string that contains a default policy name. Derives the name
+from PTYPE policy type, and FILENAME which is the fully-qualified filename.
+Uses a counter that is indexed per policy type within each API Proxy.
+"
+  (let* ((basename (file-name-sans-extension (file-name-nondirectory filename)))
+         (name-elements (split-string basename " "))
+         (is-jwt (or (string= ptype "JWT") (string= ptype "JWS")))
+         (name-suffix (mapconcat 'apigee--maybe-capitalize
+                                 (if is-jwt (seq-drop name-elements 1) name-elements)
+                                 "-"))
+         (ptype (if is-jwt
+                    (concat (s-capitalize (car name-elements)) ptype)
+                  (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
+    (let ((val 0)
+          (next-name (lambda (v)
+                       (if (> v 0)
+                           (concat ptype "-" name-suffix "-" (format "%d" v))
+                         (concat ptype "-" name-suffix)))))
       (let ((pname (funcall next-name val)))
         (while (not (apigee--policy-name-is-available pname))
           (setq val (1+ val)
                 pname (funcall next-name val)))
-        pname)))
+        pname))))
+
 
 ;;;###autoload
 (defun apigee-add-policy ()
