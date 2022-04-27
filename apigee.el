@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2021-July-01 10:53:11>
+;; Last-saved : <2022-April-27 16:12:29>
 ;;
 ;;; Commentary:
 ;;
@@ -61,7 +61,10 @@
 ;;; TODO: see todo file
 
 (require 's) ;; magnars' long lost string library
+(require 'seq)
+(require 'popup)
 (require 'xml)
+(require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
 
 (defvar apigee--base-template-dir nil
@@ -149,6 +152,18 @@
    '("application/x-www-form-urlencoded" "status=true&clientId={parsedRequest.client_id}")
    '("text/plain" "ok")
    '("application/xml" "<message><here>{parsedRequest.client_id}</here></message>")
+   '("xml" "<AboutMe>
+  <Emplid>123</Emplid>
+  <Languages>German(Speaking)</Languages>
+  <Languages>German(Writing)</Languages>
+  <Languages>German(Reading)</Languages>
+  <Languages>French(Reading)</Languages>
+  <Languages>French(Speaking)</Languages>
+  <Languages>French(Writing)</Languages>
+  <Languages>English(Reading)</Languages>
+  <Languages>English(Writing)</Languages>
+  <Languages>English(Speaking)</Languages>
+</AboutMe>")
    '("soap" "<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/' xmlns:ser='http://avatax.avalara.com/services'>
   <soap:Header>
     <wsse:Security xmlns:wsse='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'
@@ -247,7 +262,7 @@ does not end with a slash causes it to use the parent directory.
 
 (defun apigee--proper-subdirs (containing-dir)
   "Return list of full paths of proper subdirs found in CONTAINING-DIR."
-  (remove-if (lambda (file)
+  (seq-remove (lambda (file)
                (let ((clean-name (file-name-nondirectory file)))
                  (or (string-match "^\\." clean-name)
                      (string-match "node_modules" clean-name)
@@ -257,7 +272,7 @@ does not end with a slash causes it to use the parent directory.
 (defun apigee--proper-files (containing-dir &optional suffix)
   "Return list of full paths of proper files found in CONTAINING-DIR.
 Optionally filters on files with the given extension or SUFFIX."
-  (remove-if (lambda (file)
+  (seq-remove (lambda (file)
                (let ((clean-name (file-name-nondirectory file)))
                  (or
                   (and suffix
@@ -279,25 +294,19 @@ lexicographically by the car of each element, which is a string."
   (sort list-o-lists
         (lambda (a b) (string< (car a) (car b) ))))
 
-(defun apigee--get-target-template-contents (template-filename)
-  "return the contents of the target template file.
+(defun apigee--get-target-template-filename (template-filename)
+  "return the fullpath name of the target template file.
 "
-  (let ((filename
-         (if (s-starts-with? "/" template-filename)
-             template-filename
-         (apigee--join-path-elements apigee--base-template-dir "targets" template-filename))))
-    (with-temp-buffer
-      (insert-file-contents filename)
-      (buffer-substring-no-properties (point-min) (point-max)))))
+  (if (s-starts-with? "/" template-filename)
+      template-filename
+    (apigee--join-path-elements apigee--base-template-dir "targets" template-filename)))
 
-(defun apigee--get-policy-template-contents (template-filename)
-  "return the contents of the policy template file.
-"
-  (let ((filename
-         (apigee--join-path-elements apigee--base-template-dir "policies" template-filename)))
+
+(defun apigee--get-template-contents (fullpath-template-filename)
+  "return the contents of the template file."
     (with-temp-buffer
-      (insert-file-contents filename)
-      (buffer-substring-no-properties (point-min) (point-max)))))
+      (insert-file-contents fullpath-template-filename)
+      (buffer-substring-no-properties (point-min) (point-max))))
 
 (defun apigee--templates-for-one-policy-type (policy-type-directory)
   "loads the policy templates for one POLICY-TYPE-DIRECTORY, which is a fully-qualified
@@ -344,10 +353,27 @@ Each child under the template directory should have the name of a policy-type.
 Within that child dir, one or more template files, each ending in .xml,
 which contain templates for the policy. The name of the file will be
 the name of the template in the resulting menu.
+
+The apigee--policy-template-alist gets set with something like this:
+
+  ((\"AccessEntity\"
+    (\"app.xml\" \"basic.xml\" \"developer.xml\"))
+   (\"AssignMessage\"
+    (\"Set Content-Type.xml\" \"Store Original header.xml\"))
+   (\"BasicAuthentication\"
+    (\"Decode Inbound.xml\" \"Encode Outbound.xml\"))
+   ...)
+
+
+Each item in the list is a list, (POLICY-TYPE (TEMPLATE...)),
+where POLICY-TYPE is one of {Quota, XMLToJSON, Javascript, etc},
+and TEMPLATE is the shortname of the file containing a template
+to fill in for a new policy.
+
 "
   (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "policies")))
     (setq
-        apigee--policy-template-alist
+     apigee--policy-template-alist
         (let (template-list)
           (dolist (policy-type (apigee--proper-subdirs top-level-dir))
             (push
@@ -500,7 +526,8 @@ choose a target type to insert.
             (target-name-prompt "target name: ")
             (choice (assoc template-name apigee--target-template-alist)))
         (let* ((template-filename (nth 1 choice))
-              (raw-template (apigee--get-target-template-contents template-filename)))
+               (source-target-template-filename
+                 (apigee--get-target-template-filename template-filename)))
           (and (not (file-exists-p target-dir))
                (make-directory target-dir))
 
@@ -514,16 +541,15 @@ choose a target type to insert.
                              have-name (apigee--target-name-is-available n)
                              target-name-prompt "That name is in use. Target name: " ))
                       n))
-                   (elaborated-template
-                    (progn
-                      (while (string-match "##" raw-template)
-                        (setq raw-template (replace-match target-name t t raw-template)))
-                      raw-template)))
+                  (elaborated-contents
+                   (apigee--elaborate-template
+                    ;; does this need to be qualified as fullpath?
+                    source-target-template-filename target-name)))
 
               ;; create the file, expand the snippet, save it.
               (find-file (concat target-dir target-name ".xml"))
               ;; yas-expand-snippet-sync does not return until the snip is expanded.
-              (yas-expand-snippet-sync elaborated-template (point) (point))
+              (yas-expand-snippet-sync elaborated-contents (point) (point))
               (save-buffer)
               ;; here, optionally open the resource file, if any
               (kill-new
@@ -533,19 +559,8 @@ choose a target type to insert.
 
 
 (defun apigee--generate-policy-menu ()
-  "From the list of candidates, generate a keymap suitable for
-use as a menu in `popup-menu' . Each item in the input list of
-candidates is a list, (POLICY-TYPE (TEMPLATE TEMPLATE...)), where
-POLICY-TYPE is one of {Quota, XMLToJSON, Javascript, etc}, and TEMPLATE
-is the name of the file containing a template to fill in for a
-new policy. Like this:
-  ((\"AccessEntity\"
-    (\"app.xml\" \"basic.xml\" \"developer.xml\"))
-   (\"AssignMessage\"
-    (\"Set Content-Type.xml\" \"Store Original header.xml\"))
-   (\"BasicAuthentication\"
-    (\"Decode Inbound.xml\" \"Encode Outbound.xml\"))
-   ...)
+  "From the filesystem of policy templates, generate a keymap suitable for
+use as a menu in `popup-menu' .
 
 The output is a keymap representing a multi-leveled hierarchy, like this:
 
@@ -598,6 +613,35 @@ multi-level popup menu.
       keymap)))
 
 
+(defun apigee--convert-policy-alist-to-popup-menu-spec ()
+  "convert apigee--policy-template-alist like
+((\"XSL\"
+  (\"basic.xml\"))
+ (\"XMLToJSON\"
+  (\"full options.xml\" \"strip and treat as array.xml\"))
+  ...
+
+into a spec for popup-cascade-menu "
+
+  (let ((sorted-list
+         (seq-sort-by #'car #'string< (copy-sequence apigee--policy-template-alist))))
+    (mapcar (lambda (category-and-templates)
+              (let ((category (car category-and-templates))
+                    (templates (cadr category-and-templates)))
+              (cons
+               category
+               (mapcar
+                (lambda (tmpl)
+                  (popup-make-item
+                   (apigee--trim-xml-suffix tmpl)
+                   ;; :summary
+                   ;; (apigee--trim-xml-suffix tmpl)
+                   :value
+                   (list (intern category)
+                         (apigee--join-path-elements category tmpl))))
+                templates))))
+            sorted-list)))
+
 (defun apigee--prompt-user-with-policy-choices ()
   "Prompt the user with the available choices.
 In this context the available choices is the hierarchical list
@@ -607,12 +651,27 @@ of available policies.
     ;; NB:
     ;; x-popup-menu displays in the proper location, near
     ;; the cursor.
-    ;;
     ;; x-popup-dialog always displays in the center
     ;; of the frame, which makes for an annoying
     ;; user-experience.
-    (x-popup-menu (apigee--get-menu-position)
-                  (apigee--generate-policy-menu)))
+
+  ;; 20220427-1042
+  ;; x-popup-menu crashes on emacs 28.1
+    ;; (x-popup-menu (apigee--get-menu-position)
+    ;;               (apigee--generate-policy-menu))
+
+  ;; popup-cascade-menu works, sort of.  The cascading is sort of messy.  That's
+  ;; just an effect of how the length of the prefix is constructed in
+  ;; popup-create. I couldn't figure it out in popup.el.
+
+  (popup-cascade-menu (apigee--convert-policy-alist-to-popup-menu-spec)
+                      :height (length apigee--policy-template-alist)
+                      :margin-left 2
+                      :margin-right 1
+                      :around nil
+                      :isearch t
+                      )
+  )
 
 (defun apigee--is-existing-directory (dir-name)
   "Tests to see whether a name refers to an existing directory."
@@ -652,30 +711,199 @@ if no file exists by that name in the given proxy.
   "Capitalizes the string STR unless the string is an acronym like HS256 or PBES2."
   (if (apigee--string-is-uppercase-acronym-p str) str (s-capitalize str)))
 
-(defun apigee--suggested-policy-name (ptype filename)
-  "Returns a string that contains a default policy name. Derives the name
-from PTYPE policy type, and FILENAME which is the fully-qualified filename.
-Uses a counter that is indexed per policy type within each API Proxy.
-"
-  (let* ((basename (file-name-sans-extension (file-name-nondirectory filename)))
+(defun apigee--policy-name-elements (ptype policy-template-filename)
+  "Returns a list containing name elements, (PREFIX SUFFIX), for a policy file."
+  (let* ((basename (file-name-sans-extension (file-name-nondirectory policy-template-filename)))
          (name-elements (split-string basename " "))
          (is-jwt (or (string= ptype "JWT") (string= ptype "JWS")))
          (name-suffix (mapconcat 'apigee--maybe-capitalize
                                  (if is-jwt (seq-drop name-elements 1) name-elements)
                                  "-"))
-         (ptype (if is-jwt
+         (name-prefix (if is-jwt
                     (concat (s-capitalize (car name-elements)) ptype)
-                  (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
+                    (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
+    (list name-prefix name-suffix)))
+
+(defun apigee--suggested-policy-name (ptype filename)
+  "Returns a string that contains a default policy name. Derives the name
+from PTYPE policy type, and FILENAME which is the fully-qualified filename.
+Uses a counter that is indexed per policy type within each API Proxy.
+"
+  (let* ((name-elements (apigee--policy-name-elements ptype filename))
+         (name-prefix (car name-elements))
+         (name-suffix (cadr name-elements)))
     (let ((val 0)
           (next-name (lambda (v)
                        (if (> v 0)
-                           (concat ptype "-" name-suffix "-" (format "%d" v))
-                         (concat ptype "-" name-suffix)))))
+                           (concat name-prefix "-" name-suffix "-" (format "%d" v))
+                         (concat name-prefix "-" name-suffix)))))
       (let ((pname (funcall next-name val)))
         (while (not (apigee--policy-name-is-available pname))
           (setq val (1+ val)
                 pname (funcall next-name val)))
         pname))))
+
+(defun apigee-inject-proxy-revision-logic ()
+  "Inject the policies and flow to insert a proxy revision header
+into the response. Handy when modifying an existing proxy that
+does not send back a revision header, or when creating a proxy
+from a template that doesn't send back a revision header."
+  (interactive)
+  (let ((bundle-dir (apigee--root-path-of-bundle))
+        (bundle-type (apigee--type-of-bundle))
+        (policy-names))
+    (if (s-equals? bundle-type "apiproxy")
+        (let ((bundle-policy-dir (concat bundle-dir bundle-type "/policies/")))
+          (dolist (am-template-file
+                   (list "clean request headers from response.xml"
+                         "inject proxy revision header.xml"))
+            (let* ((name-elements
+                    (apigee--policy-name-elements "AssignMessage" am-template-file))
+                   (name-prefix (car name-elements))
+                   (name-suffix (cadr name-elements))
+                   (policy-name (concat name-prefix "-" name-suffix))
+                   (fullpath-dest-policy-path
+                    (apigee--join-path-elements bundle-policy-dir (concat policy-name ".xml"))))
+              (setq policy-names (cons policy-name policy-names))
+              (if (not (file-exists-p fullpath-dest-policy-path))
+                  (let ((elaborated-contents
+                         (apigee--elaborate-template
+                          (apigee--join-path-elements apigee--base-template-dir "policies" "AssignMessage" am-template-file)
+                          policy-name)))
+                    ;; create the file, expand the snippet, save it.
+                    (with-current-buffer (find-file-noselect fullpath-dest-policy-path)
+                      ;; yas-expand-snippet-sync does not return until the snip is expanded.
+                      (yas-expand-snippet-sync elaborated-contents (point) (point))
+                      (save-buffer)
+                      )))))
+
+          ;; and now inject the references to these policies in the
+          ;; right places in the various proxy endpoint(s).
+
+          (let ((bundle-proxy-dir
+                 (concat bundle-dir bundle-type "/proxies/")))
+            (dolist (proxyendpoint-file
+                     (apigee--proper-files bundle-proxy-dir ".xml"))
+              (save-excursion
+                (with-current-buffer (find-file-noselect proxyendpoint-file)
+                  (let*
+                      ((root (xml-parse-region (point-min) (point-max)))
+                       (proxy-endpoint-elt (car root))
+                       (default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))
+                       (preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))
+                       (postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))
+                       (step-references
+                        (mapcar (lambda (s) (car (apigee--parse-xml (concat "  <Step>\n    <Name>" s  "</Name>\n  </Step>"))))
+                                policy-names)))
+
+                    (if (not preflow-elt)
+                        ;; insert PreFlow node, try one of various locations.
+                        (let ((position-index
+                               (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
+                                        '(PostFlow PostClientFlow Flows DefaultFaultRule FaultRules)))
+                              (new-preflow-elt
+                               (car (apigee--parse-xml "<PreFlow><Request/><Response/></PreFlow>"))))
+                          ;; insert before the selected element
+                          (push new-preflow-elt (cdr (nthcdr position-index proxy-endpoint-elt)))
+                          (setq preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))))
+
+                    (if (not postflow-elt)
+                        ;; insert PostFlow node, try one of various locations.
+                        (let ((position-index
+                               (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
+                                        '(PostClientFlow Flows PreFlow DefaultFaultRule FaultRules)))
+                              (new-postflow-elt
+                               (car (apigee--parse-xml "<PostFlow><Request/><Response/></PostFlow>"))))
+                          ;; insert before the selected element
+                          (push new-postflow-elt (cdr (nthcdr position-index proxy-endpoint-elt)))
+                          (setq postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))))
+
+                    (if preflow-elt
+                        (let ((preflow-response-elt (car (xml-get-children preflow-elt 'Response))))
+                          ;; append the appropriate step-reference as child to Response
+                          (setcdr (last preflow-response-elt)
+                                (cons "\n    " (list (cadr step-references))))))
+
+
+                    (if postflow-elt
+                        (let ((postflow-response-elt (car (xml-get-children postflow-elt 'Response))))
+                          ;; append the appropriate step-reference as child to Response
+                          (setcdr (last postflow-response-elt)
+                                  (cons "\n    " (list (car step-references))))))
+
+
+                    (if (not default-faultrule-elt)
+                        ;; insert DefaultFaultRule node. As above, try one of various locations.
+                        (let ((position-index
+                               (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
+                                               '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
+                              (new-dfr-elt
+                               (car (apigee--parse-xml "<DefaultFaultRule><AlwaysEnforce>true</AlwaysEnforce></DefaultFaultRule>"))))
+                          ;; insert before the selected element
+                          (push new-dfr-elt (cdr (nthcdr position-index proxy-endpoint-elt)))
+                          (setq default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))))
+
+                    (if default-faultrule-elt
+                        ;; append the step-references as children to Response
+                        (setcdr (last default-faultrule-elt)
+                                (cons "\n    " (list (car step-references)))))
+
+                    (apigee--serialize-xml-elt root))
+                  (save-buffer 0)))))))))
+
+
+(defun apigee--xml-locate-first-child-node (node child-name)
+  (let ((n -1)
+        (count))
+      (dolist (child (xml-node-children node))
+        (setq n (+ 1 n))
+        (if (and (listp child)
+                 (equal (xml-node-name child) child-name))
+          (setq count n)))
+      count))
+
+;; (defun apigee--diag-parse ()
+;;   (interactive)
+;;   (let*
+;;       ((root (xml-parse-region (point-min) (point-max)))
+;;        (proxy-endpoint-elt (car root))
+;;        (first (-first (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
+;;                       '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
+;;        (position-index (apigee--xml-locate-first-child-node proxy-endpoint-elt first))
+;;        (the-cdr (cdr (nthcdr position-index proxy-endpoint-elt))))))
+;;
+;;
+;;     ;;    (faultrules-elt (car (xml-get-children proxy-endpoint-elt 'FaultRules)))
+;;     ;;    (default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))
+;;     ;;    (httpproxyconnection-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
+;;     ;;    (preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))
+;;     ;;    (preflow-response-elt (car (xml-get-children preflow-elt 'Response)))
+;;     ;;    (postclientflow-elt (car (xml-get-children proxy-endpoint-elt 'PostClientFlow)))
+;;     ;;    (postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))
+;;     ;;    (flows-elt (car (xml-get-children proxy-endpoint-elt 'Flows)))
+;;     ;;    (dest-elt (or default-faultrule-elt faultrules-elt httpproxyconnection-elt))
+;;     ;;    (new-preflow-elt
+;;     ;;     (car (apigee--parse-xml "<PreFlow><Request/><Response/></PreFlow>"))))
+;;     ;; ;;(setcdr new-preflow-elt (cddr dest-elt))
+;;     ;; (setcdr (cddr dest-elt) new-preflow-elt)
+;;     ;; (apigee--serialize-xml-elt root)))
+
+
+
+(defun apigee--parse-xml (xml-string)
+  (with-temp-buffer
+    (insert xml-string)
+    (xml--parse-buffer nil nil)))
+
+
+(defun apigee--elaborate-template (fullpath-template-filename thing-name)
+  "returns the contents of the named template with the ## placeholders
+replaced."
+  (let ((raw-template (apigee--get-template-contents fullpath-template-filename)))
+    (progn)
+    (while (string-match "##" raw-template)
+      (setq raw-template (replace-match thing-name t t raw-template)))
+    raw-template))
 
 
 ;;;###autoload
@@ -686,7 +914,6 @@ the policy, create the appropriate XML file, and using
 yas-snippet, expand the template associated to the chosen policy,
 into the policy file. It then will open any resource files as
 appropriate.
-
 "
   (interactive)
   (let ((bundle-dir (apigee--root-path-of-bundle))
@@ -704,8 +931,7 @@ appropriate.
                 (policy-name-prompt "policy name: "))
             (and (not (file-exists-p policy-dir))
                  (make-directory policy-dir))
-            (let* ((raw-template (apigee--get-policy-template-contents template-filename))
-                   (default-value (apigee--suggested-policy-name ptype template-filename))
+            (let* ((default-value (apigee--suggested-policy-name ptype template-filename))
                    (policy-name
                     (let (n)
                       (while (not have-name)
@@ -713,17 +939,15 @@ appropriate.
                               have-name (apigee--policy-name-is-available n)
                               policy-name-prompt "That name is in use. Policy name: " ))
                       n))
-
-                   (elaborated-template
-                    (progn
-                      (while (string-match "##" raw-template)
-                        (setq raw-template (replace-match policy-name t t raw-template)))
-                      raw-template)))
+                   (fullpath-template-filename
+                    (apigee--join-path-elements apigee--base-template-dir "policies" template-filename))
+                   (elaborated-contents
+                    (apigee--elaborate-template fullpath-template-filename policy-name)))
 
               ;; create the file, expand the snippet, save it.
               (find-file (concat policy-dir policy-name ".xml"))
               ;; yas-expand-snippet-sync does not return until the snip is expanded.
-              (yas-expand-snippet-sync elaborated-template (point) (point))
+              (yas-expand-snippet-sync elaborated-contents (point) (point))
               (save-buffer)
               ;;(apigee-mode 1)
               ;; here, optionally open the resource file, if any
@@ -924,12 +1148,12 @@ is visiting a policy file. otherwise nil."
     (indent-region (point-min) (point-max)))
   )
 
-(defun apigee--verify-exactly-one (xml-file-list source-dir)
+(defun apigee--verify-exactly-one (file-list source-dir)
   "verifies that there is exactly one xml file."
-      (if (not xml-file-list)
+      (if (not file-list)
           (error
            (message "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
-      (if (not (= (length xml-file-list) 1))
+      (if (not (= (length file-list) 1))
           (error
            (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir))))
 
@@ -948,13 +1172,13 @@ changing names and replacing / expanding things as appropriate."
   (let ((source-apiproxy-dir (apigee--join-path-elements source "apiproxy"))
         (dest-apiproxy-dir (apigee--join-path-elements destination "apiproxy")))
 
-    (let ((xml-file-list (apigee--proper-files source-apiproxy-dir ".xml")))
-      (apigee--verify-exactly-one xml-file-list source-apiproxy-dir)
+    (let ((file-list (apigee--proper-files source-apiproxy-dir ".xml")))
+      (apigee--verify-exactly-one file-list source-apiproxy-dir)
       ;; create the toplevel destination directory
       (make-directory dest-apiproxy-dir t)
       ;; copy, then intelligently modify the toplevel proxy bundle definition file
       (let ((new-xml-file-name (apigee--join-path-elements dest-apiproxy-dir (concat proxy-name ".xml"))))
-        (copy-file (car xml-file-list) new-xml-file-name nil t t nil)
+        (copy-file (car file-list) new-xml-file-name nil t t nil)
         (with-current-buffer (find-file-noselect new-xml-file-name)
           (let*
               ((root (xml-parse-region (point-min) (point-max)))
@@ -970,12 +1194,12 @@ changing names and replacing / expanding things as appropriate."
 
     ;; if we can find a single XML file in the proxies dir, modify it
     (let* ((dest-proxyendpoints-dir (apigee--join-path-elements dest-apiproxy-dir "proxies"))
-           (xml-file-list (apigee--proper-files dest-proxyendpoints-dir ".xml")))
-      (if (not xml-file-list)
+           (file-list (apigee--proper-files dest-proxyendpoints-dir ".xml")))
+      (if (not file-list)
           (error
            (message "[apigee] cannot find XML file in %s, in `apigee--copy-proxy-template-files'" dest-proxyendpoints-dir)))
-      (if (= (length xml-file-list) 1)
-          (with-current-buffer (find-file-noselect (car xml-file-list))
+      (if (= (length file-list) 1)
+          (with-current-buffer (find-file-noselect (car file-list))
             (let*
                 ((root (xml-parse-region (point-min) (point-max)))
                  (proxy-endpoint-elt (car root))
@@ -983,7 +1207,7 @@ changing names and replacing / expanding things as appropriate."
                  (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
               (setcar (cddr basepath-elt) (concat "/" proxy-name))
               (apigee--serialize-xml-elt root)
-              (apigee--cleanup-quotes))
+              )
             (save-buffer 0))))
     ))
 
@@ -992,12 +1216,12 @@ changing names and replacing / expanding things as appropriate."
 changing names and replacing / expanding things as appropriate."
   (let ((source-sf-dir (apigee--join-path-elements source "sharedflowbundle"))
         (dest-sf-dir (apigee--join-path-elements destination "sharedflowbundle")))
-    (let ((xml-file-list (apigee--proper-files source-sf-dir ".xml")))
-      (apigee--verify-exactly-one xml-file-list source-sf-dir)
+    (let ((file-list (apigee--proper-files source-sf-dir ".xml")))
+      (apigee--verify-exactly-one file-list source-sf-dir)
       (make-directory dest-sf-dir t)
       ;; copy, then intelligently modify the toplevel proxy bundle definition file
       (let ((new-xml-file-name (apigee--join-path-elements dest-sf-dir (concat sf-name ".xml"))))
-        (copy-file (car xml-file-list) new-xml-file-name nil t t nil)
+        (copy-file (car file-list) new-xml-file-name nil t t nil)
         (with-current-buffer (find-file-noselect new-xml-file-name)
           (let*
               ((root (xml-parse-region (point-min) (point-max)))
