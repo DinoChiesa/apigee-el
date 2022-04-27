@@ -17,8 +17,9 @@
   <Response>tokenResponse</Response>
   <HTTPTargetConnection>
     <SSLInfo>
-        <Enabled>true</Enabled>
-        <IgnoreValidationErrors>false</IgnoreValidationErrors>
+      <Enabled>true</Enabled>
+      <IgnoreValidationErrors>false</IgnoreValidationErrors>
+      <TrustStore>mytruststore</TrustStore>
     </SSLInfo>
     <Properties>
       <Property name='success.codes'>2xx, 3xx</Property>

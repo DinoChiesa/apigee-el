@@ -32,7 +32,7 @@
 
     -->
 
-    <!-- these are required -->
+    <!-- these are required? -->
     <Algorithm>...</Algorithm>
     <PrivateKey>...</PrivateKey> <!-- either this or SecretKey is required -->
     <SecretKey>...</SecretKey> <!-- either this or PrivateKey is required -->
@@ -44,4 +44,5 @@
 
   </FormatAsJWT>
   <GenerateResponse enabled="false"/>
+  <RFCCompliantRequestResponse>true</RFCCompliantRequestResponse>
 </OAuthV2>

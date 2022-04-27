@@ -1,10 +1,9 @@
 <ExtractVariables name='##'>
-   <DisplayName>Extract a portion of the url path</DisplayName>
    <Source>request</Source>
    <VariablePrefix>extracted</VariablePrefix>
    <URIPath>
       <!-- put the extracted value into extracted.id -->
-      <!-- The Pattern is matched against pathsuffix (what comes after the basepath) -->
+      <!-- NB: The Pattern is matched against pathsuffix (what comes AFTER the basepath) -->
       <Pattern ignoreCase='true'>/accounts/{id}</Pattern>
    </URIPath>
    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>

@@ -5,6 +5,7 @@
     <SSLInfo>
       <Enabled>true</Enabled>
       <IgnoreValidationErrors>true</IgnoreValidationErrors>
+      <TrustStore>mytruststore</TrustStore>
     </SSLInfo>
     <Properties>
       <Property name='success.codes'>2xx, 3xx</Property>

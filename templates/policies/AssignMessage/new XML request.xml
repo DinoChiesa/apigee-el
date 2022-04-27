@@ -1,0 +1,11 @@
+<AssignMessage name='##'>
+  <DisplayName>##</DisplayName>
+  <AssignTo createNew='true' transport='http' type='request'>${1:contrivedMessage}</AssignTo>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <Set>
+    <Payload contentType='text/xml'>
+${2:$$(cadr (assoc "xml" apigee--message-payload-sample-alist))}
+</Payload>
+    <Verb>POST</Verb>
+  </Set>
+</AssignMessage>

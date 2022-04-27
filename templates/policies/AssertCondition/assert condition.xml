@@ -1,0 +1,3 @@
+<AssertCondition name="##">
+  <Condition>$1</Condition>
+</AssertCondition>

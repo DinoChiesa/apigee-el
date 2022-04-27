@@ -4,6 +4,7 @@
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <PublicKey>
     <JWKS ref='jwksResponse.content'/>
+    <JWKS uri='https://hardcoded.uri.here/jwks.json'/>
   </PublicKey>
   <Subject>${2:DinoChiesa}</Subject>
   <Issuer>${3:accounts.google.com}</Issuer>

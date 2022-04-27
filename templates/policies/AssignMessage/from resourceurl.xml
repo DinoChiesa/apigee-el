@@ -1,0 +1,6 @@
+<AssignMessage name='##'>
+  <AssignVariable>
+    <Name>${1:assigned-variable}</Name>
+    <ResourceURL>${2:$$(yas-choose-value (list "jsc" "wsdl" "xsd" "oas" "xml"))}//${3:resourcename.txt}</ResourceURL>
+  </AssignVariable>
+</AssignMessage>

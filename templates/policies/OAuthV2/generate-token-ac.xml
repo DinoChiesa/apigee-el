@@ -30,4 +30,5 @@
     </Attributes>
 
   <GenerateResponse />
+  <RFCCompliantRequestResponse>true</RFCCompliantRequestResponse>
 </OAuthV2>

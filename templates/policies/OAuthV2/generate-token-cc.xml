@@ -25,4 +25,5 @@
   </Attributes>
 
   <GenerateResponse enabled="false"/>
+  <RFCCompliantRequestResponse>true</RFCCompliantRequestResponse>
 </OAuthV2>

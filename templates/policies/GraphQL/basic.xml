@@ -1,0 +1,8 @@
+<GraphQL name="##" >
+  <Source>request</Source>
+  <OperationType>${1:$$(yas-choose-value (list \"query\" \"mutation\" \"all\"))}</OperationType>
+  <MaxDepth>${2:10}</MaxDepth>
+  <MaxCount>${3:10}</MaxCount>
+  <Action>${4:$$(yas-choose-value (list \"parse\" \"verify\" \"parse_verify\"))}</Action>
+  <ResourceURL>PATH/TO/SCHEMA.xsd</ResourceURL>
+</GraphQL>

@@ -1,0 +1,7 @@
+<PublishMessage name="##">
+    <Source>$1</Source>
+    <CloudPubSub>
+        <Topic>$2</Topic>
+    </CloudPubSub>
+    <IgnoreUnresolvedVariables>[true|false]</IgnoreUnresolvedVariables>
+</PublishMessage>

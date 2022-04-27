@@ -9,7 +9,7 @@
   <FaultRules/>
   <DefaultFaultRule name="default-fault-rule">
     <Step>
-      <Name>AM-InjectProxyVersionHeader</Name>
+      <Name>AM-Inject-Proxy-Revision-Header</Name>
     </Step>
     <AlwaysEnforce>true</AlwaysEnforce>
   </DefaultFaultRule>
@@ -19,10 +19,7 @@
     </Request>
     <Response>
       <Step>
-        <Name>AM-CleanResponseHeaders</Name>
-      </Step>
-      <Step>
-        <Name>AM-InjectProxyVersionHeader</Name>
+        <Name>AM-Clean-Request-Headers-From-Response</Name>
       </Step>
     </Response>
   </PreFlow>
@@ -31,6 +28,9 @@
     <Request>
     </Request>
     <Response>
+      <Step>
+        <Name>AM-Inject-Proxy-Revision-Header</Name>
+      </Step>
     </Response>
   </PostFlow>
 
@@ -48,14 +48,18 @@
       <Request>
       </Request>
       <Response>
-        <Step><Name>AM-Response</Name></Step>
+        <Step>
+          <Name>AM-Response</Name>
+        </Step>
       </Response>
       <Condition>(proxy.pathsuffix MatchesPath "/t1") and (request.verb = "GET")</Condition>
     </Flow>
 
     <Flow name='unknown request'>
       <Request>
-        <Step><Name>RF-UnknownRequest</Name></Step>
+        <Step>
+          <Name>RF-Unknown-Request</Name>
+        </Step>
       </Request>
       <Response>
       </Response>

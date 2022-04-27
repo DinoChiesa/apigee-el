@@ -2,6 +2,16 @@
   <DisplayName>##</DisplayName>
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <AssignVariable>
+    <Name>iso8601Format</Name>
+    <Value>yyyy-MM-dd'T'HH:mm:ss'Z'</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>formattedTime</Name>
+    <Template>{timeFormatUTCMs(iso8601Format,system.timestamp)}</Template>
+    <!-- eg, 2020-10-02T15:59:26Z -->
+  </AssignVariable>
+
+  <AssignVariable>
     <Name>formatString1</Name>
     <Value>yyyy-MM-dd HH:mm:ss.SSS</Value> <!-- EEEE -->
   </AssignVariable>
@@ -12,23 +22,13 @@
   </AssignVariable>
 
   <AssignVariable>
-    <Name>formatString1</Name>
-    <Value>yyyy-MM-dd'T'HH:mm:ss'Z'</Value>
-  </AssignVariable>
-  <AssignVariable>
-    <Name>formattedTime</Name>
-    <Template>{timeFormatUTCMs(formatString1,client.received.end.timestamp)}</Template>
-    <!-- eg, 2020-10-02T15:59:26Z -->
-  </AssignVariable>
-
-  <AssignVariable>
-    <Name>formatString1</Name>
+    <Name>format3</Name>
     <Value>yyyyMMdd'T'HHmmss'Z'</Value>
   </AssignVariable>
   <AssignVariable>
     <Name>x-amz-date</Name>
-    <Template>{timeFormatUTCMs(formatString1,system.timestamp)}</Template>
-    <!-- example result: 20210604T123600Z -->
+    <Template>{timeFormatUTCMs(format3,system.timestamp)}</Template>
+    <!-- eg, 20210604T123600Z -->
   </AssignVariable>
 
   <AssignVariable>

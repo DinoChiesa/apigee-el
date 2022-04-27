@@ -5,7 +5,7 @@
     <Value ref='private.secretkey'/>
   </SecretKey>
   <AdditionalHeaders>
-    <Claim name='issuer'>apigee-edge</Claim>
+    <Claim name='issuer'>urn://apigee</Claim>
   </AdditionalHeaders>
   <Payload ref='request.content'/>
   <OutputVariable>output_variable_name</OutputVariable>

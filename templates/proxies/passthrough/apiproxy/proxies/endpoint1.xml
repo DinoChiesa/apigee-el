@@ -9,7 +9,7 @@
   <FaultRules/>
   <DefaultFaultRule name="default-fault-rule">
     <Step>
-      <Name>AM-InjectProxyVersionHeader</Name>
+      <Name>AM-Inject-Proxy-Revision-Header</Name>
     </Step>
     <AlwaysEnforce>true</AlwaysEnforce>
   </DefaultFaultRule>
@@ -23,7 +23,7 @@
     <Request/>
     <Response>
       <Step>
-        <Name>AM-InjectProxyVersionHeader</Name>
+        <Name>AM-Inject-Proxy-Revision-Header</Name>
       </Step>
     </Response>
   </PostFlow>
@@ -53,7 +53,7 @@
 
     <Flow name='unknown request'>
       <Request>
-        <Step><Name>RF-UnknownRequest</Name></Step>
+        <Step><Name>RF-Unknown-Request</Name></Step>
       </Request>
       <Response>
       </Response>

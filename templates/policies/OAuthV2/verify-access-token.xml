@@ -20,6 +20,7 @@
       status
       scope
       apiproduct.name*
-      apiproduct.<custom_attribute_name>*
+      apiproduct.{custom_attribute_name}*
+      app.{custom-attribute-name}*
     -->
 </OAuthV2>

@@ -1,0 +1,41 @@
+<ServiceCallout name='##'>
+  <Request variable='myrequestvariable'>
+    <Set>
+      <Verb>POST</Verb>
+      <Payload contentType='application/json'>{
+  "data": string,
+  "attributes": {
+    "name1": "value1",
+    "name2": "value2",
+    ...
+  },
+  "messageId": "string",
+  ..
+}
+</Payload>
+    </Set>
+  </Request>
+
+  <Response>pubsubResponse</Response>
+
+  <HTTPTargetConnection>
+
+    <!-- this will use the Service Account you specified at deployment time -->
+    <Authentication>
+      <GoogleAccessToken>
+        <Scopes>
+          <Scope>https://www.googleapis.com/auth/pubsub</Scope>
+        </Scopes>
+      </GoogleAccessToken>
+    </Authentication>
+
+    <SSLInfo>
+        <Enabled>true</Enabled>
+        <IgnoreValidationErrors>false</IgnoreValidationErrors>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 3xx</Property>
+    </Properties>
+    <URL>https://pubsub.googleapis.com/v1/projects/{gcp-project}/topics/{pubsub-topic}:publish</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

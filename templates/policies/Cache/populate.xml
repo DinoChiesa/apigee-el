@@ -9,7 +9,7 @@
   <ExpirySettings>
     <!-- include one of the following... -->
     <TimeOfDay ref='time_variable'>hh:mm:ss</TimeOfDay>
-    <TimeoutInSec ref='duration_variable'>864000</TimeoutInSec> <!-- 864000 = 10 days -->
+    <TimeoutInSeconds ref='duration_variable'>864000</TimeoutInSeconds> <!-- 864000 = 10 days -->
     <ExpiryDate ref='date_variable'>mm-dd-yyyy</ExpiryDate>
   </ExpirySettings>
 </PopulateCache>

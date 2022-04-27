@@ -1,0 +1,12 @@
+<OASValidation name="##">
+   <OASResource>oas://my-spec.json</OASResource>
+   <Options>
+      <ValidateMessageBody>true|false</ValidateMessageBody>
+      <AllowUnspecifiedParameters>
+         <Header>false</Header>
+         <Query>false</Query>
+         <Cookie>false</Cookie>
+      </AllowUnspecifiedParameters>
+   </Options>
+   <Source>request</Source>
+</OASValidation>
