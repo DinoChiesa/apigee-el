@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2022-April-27 16:12:29>
+;; Last-saved : <2023-December-18 14:24:44>
 ;;
 ;;; Commentary:
 ;;
@@ -206,6 +206,7 @@
 (defun apigee--restore-state ()
   "function expected to be called on initial module load, that restores the previous state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
   (let ((dat-file-path (apigee--path-to-settings-file)))
+    (if (file-exists-p dat-file-path)
     (with-temp-buffer
       (insert-file-contents dat-file-path)
       (save-excursion
@@ -216,7 +217,8 @@
               (if (and
                    (member setting-name apigee--list-of-vars-to-store-and-restore)
                    (cadr one-setting))
-                  (set (intern setting-name) (cadr one-setting))))))))))
+                  (set (intern setting-name) (cadr one-setting))))))))
+    )))
 
 (defun apigee--persist-state ()
   "function expected to be called periodically to store the state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
@@ -560,87 +562,79 @@ choose a target type to insert.
 
 (defun apigee--generate-policy-menu ()
   "From the filesystem of policy templates, generate a keymap suitable for
-use as a menu in `popup-menu' .
+use as a menu in `x-popup-menu' .
 
-The output is a keymap representing a multi-leveled hierarchy, like this:
+The output is a list of the form (TITLE PANE1 PANE2...), where
+each pane is a list of form (TITLE ITEM1 ITEM2...).  Each ITEM is
+a cons cell (STRING . VALUE), where the VALUE is a cons cell
+containing the policy type and template name.
 
-  (keymap
+The list looks like this:
+
+  (\"Undisplayed Title\"
+   (\"AccessControl\"
+    (\"basic\" \"AccessControl\" . \"basic.xml\"))
+   (\"BasicAuthentication\"
+    (\"Encode Outbound\" \"BasicAuthentication\" . \"Encode Outbound.xml\")
+    (\"Decode Inbound\" \"BasicAuthentication\" . \"Decode Inbound.xml\"))
     ...
-   (BasicAuthentication \"BasicAuthentication\" keymap
-                        (12 \"Decode Inbound\" . 12)
-                        (11 \"Encode Outbound\" . 11)
-                        \"BasicAuthentication\")
-   (AssignMessage \"AssignMessage\" keymap
-                  (10 \"assign variable\" . 10)
-                  (9 \"clean response headers\" . 9)
-                  (8 \"full response\" . 8)
-                  (7 \"remove query param or header\" . 7)
-                  (6 \"Set Content-Type\" . 6)
-                  (5 \"set query param and-or headers\" . 5)
-                  (4 \"Store Original header\" . 4)
-                  \"AssignMessage\")
-   (AccessEntity \"AccessEntity\" keymap
-                 (3 \"app\" . 3)
-                 (2 \"basic\" . 2)
-                 (1 \"developer\" . 1)
-                 \"AccessEntity\")
-   \"Insert a policy...\")
+   (\"XSL\"
+    (\"basic.xml\" \"XSL\" . \"basic.xml\")))
 
 
-The intention is to provide input to `popup-menu', to display a cascading,
+The intention is to provide input to `x-popup-menu', to display a cascading,
 multi-level popup menu.
 
+When a selection is made, the result is the VALUE.
+
 "
-  (let ((candidates apigee--policy-template-alist))
-    (let ((keymap (make-sparse-keymap "Insert a policy..."))
-          (n 0) ;; need for cons cell
-          (j 0)
-          (len (length candidates))
-          (sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
-
-      (while (< j len)
-        (let* ((template-set (nth j candidates))
-               (cat (car template-set))
-               (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
-          (define-key keymap (vector (intern cat)) (cons cat (make-sparse-keymap cat)))
-          (dolist (template templates)
-            (define-key keymap
-              (vector (intern cat) (apigee--join-path-elements cat template))
-              (cons (apigee--trim-xml-suffix template) n))
-            ))
-
-        (setq j (1+ j)))
-      keymap)))
-
-
-(defun apigee--convert-policy-alist-to-popup-menu-spec ()
-  "convert apigee--policy-template-alist like
-((\"XSL\"
-  (\"basic.xml\"))
- (\"XMLToJSON\"
-  (\"full options.xml\" \"strip and treat as array.xml\"))
-  ...
-
-into a spec for popup-cascade-menu "
-
-  (let ((sorted-list
+  (let ((candidates
          (seq-sort-by #'car #'string< (copy-sequence apigee--policy-template-alist))))
-    (mapcar (lambda (category-and-templates)
-              (let ((category (car category-and-templates))
-                    (templates (cadr category-and-templates)))
-              (cons
-               category
-               (mapcar
-                (lambda (tmpl)
-                  (popup-make-item
-                   (apigee--trim-xml-suffix tmpl)
-                   ;; :summary
-                   ;; (apigee--trim-xml-suffix tmpl)
-                   :value
-                   (list (intern category)
-                         (apigee--join-path-elements category tmpl))))
-                templates))))
-            sorted-list)))
+
+    (let ((sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
+      (cons "Undisplayed Title"
+            (mapcar (lambda (template-set)
+                      (let* ((policy-type (car template-set))
+                             (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
+                        (cons policy-type
+                              (mapcar
+                               (lambda (item) (cons
+                                               (apigee--trim-xml-suffix item) ;; shortname
+                                               (cons policy-type item)))
+                               templates))
+                        ))
+                    candidates))))
+  )
+
+
+;; (defun apigee--convert-policy-alist-to-popup-menu-spec ()
+;;   "convert apigee--policy-template-alist like
+;; ((\"XSL\"
+;;   (\"basic.xml\"))
+;;  (\"XMLToJSON\"
+;;   (\"full options.xml\" \"strip and treat as array.xml\"))
+;;   ...
+;;
+;; into a spec for popup-cascade-menu "
+;;
+;;   (let ((sorted-list
+;;          (seq-sort-by #'car #'string< (copy-sequence apigee--policy-template-alist))))
+;;     (mapcar (lambda (category-and-templates)
+;;               (let ((category (car category-and-templates))
+;;                     (templates (cadr category-and-templates)))
+;;               (cons
+;;                category
+;;                (mapcar
+;;                 (lambda (tmpl)
+;;                   (popup-make-item
+;;                    (apigee--trim-xml-suffix tmpl)
+;;                    ;; :summary
+;;                    ;; (apigee--trim-xml-suffix tmpl)
+;;                    :value
+;;                    (list (intern category)
+;;                          (apigee--join-path-elements category tmpl))))
+;;                 templates))))
+;;             sorted-list)))
 
 (defun apigee--prompt-user-with-policy-choices ()
   "Prompt the user with the available choices.
@@ -648,29 +642,42 @@ In this context the available choices is the hierarchical list
 of available policies.
 "
   (interactive)
-    ;; NB:
-    ;; x-popup-menu displays in the proper location, near
-    ;; the cursor.
-    ;; x-popup-dialog always displays in the center
-    ;; of the frame, which makes for an annoying
-    ;; user-experience.
-
   ;; 20220427-1042
   ;; x-popup-menu crashes on emacs 28.1
-    ;; (x-popup-menu (apigee--get-menu-position)
-    ;;               (apigee--generate-policy-menu))
+  ;; or, maybe it was because I was using it incorrectly.
+  ;; as of 20231218-1424, it seems to be working correctly.
+   (x-popup-menu (apigee--get-menu-position)
+                 (apigee--generate-policy-menu))
+
+
 
   ;; popup-cascade-menu works, sort of.  The cascading is sort of messy.  That's
   ;; just an effect of how the length of the prefix is constructed in
   ;; popup-create. I couldn't figure it out in popup.el.
 
-  (popup-cascade-menu (apigee--convert-policy-alist-to-popup-menu-spec)
-                      :height (length apigee--policy-template-alist)
-                      :margin-left 2
-                      :margin-right 1
-                      :around nil
-                      :isearch t
-                      )
+  ;; Can customize the face with:
+  ;;(set-face-attribute 'popup-menu-face nil :height 105)
+  ;;(set-face-attribute 'popup-menu-selection-face nil :height 105)
+
+  ;; But ... this will apply to all popups. Anything that uses popup.el. ??
+
+  ;; Omitting the height param... allows a better view of the toplevel menu,
+  ;; which is nice. But selecting from that level results in an error, "args out
+  ;; of range" in fn `poup-line-overlay'.  I was not able to diagnose that.
+  ;; So I keep the height and ... suffer with poor UI?
+
+  ;; (popup-cascade-menu (apigee--convert-policy-alist-to-popup-menu-spec)
+  ;;                     ;;:height (length apigee--policy-template-alist)
+  ;;                     :height 10
+  ;;                     :margin-left 2
+  ;;                     :max-width 21
+  ;;                     :margin-right 1
+  ;;                     :around t
+  ;;                     :scroll-bar t
+  ;;                     :isearch t
+  ;;                     )
+
+
   )
 
 (defun apigee--is-existing-directory (dir-name)
@@ -819,14 +826,28 @@ from a template that doesn't send back a revision header."
                           (setq postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))))
 
                     (if preflow-elt
-                        (let ((preflow-response-elt (car (xml-get-children preflow-elt 'Response))))
+                        (let* ((preflow-response-elt (car (xml-get-children preflow-elt 'Response))))
+
+                          (if (not preflow-response-elt)
+                              (let ((new-preflow-response-elt (apigee--parse-xml "<Response></Response>")))
+                                ;; insert as last element in PreFlow
+                                (setcdr (last preflow-elt) new-preflow-response-elt)
+                                (setq preflow-response-elt (car (xml-get-children preflow-elt 'Response)))))
+
                           ;; append the appropriate step-reference as child to Response
                           (setcdr (last preflow-response-elt)
-                                (cons "\n    " (list (cadr step-references))))))
+                                  (cons "\n    " (list (cadr step-references))))))
 
 
                     (if postflow-elt
                         (let ((postflow-response-elt (car (xml-get-children postflow-elt 'Response))))
+
+                          (if (not postflow-response-elt)
+                              (let ((new-postflow-response-elt (apigee--parse-xml "<Response></Response>")))
+                                ;; insert as last element in PostFlow
+                                (setcdr (last postflow-elt) new-postflow-response-elt)
+                                (setq postflow-response-elt (car (xml-get-children postflow-elt 'Response)))))
+
                           ;; append the appropriate step-reference as child to Response
                           (setcdr (last postflow-response-elt)
                                   (cons "\n    " (list (car step-references))))))
@@ -900,7 +921,7 @@ from a template that doesn't send back a revision header."
   "returns the contents of the named template with the ## placeholders
 replaced."
   (let ((raw-template (apigee--get-template-contents fullpath-template-filename)))
-    (progn)
+    ;;(progn)
     (while (string-match "##" raw-template)
       (setq raw-template (replace-match thing-name t t raw-template)))
     raw-template))
@@ -919,60 +940,56 @@ appropriate.
   (let ((bundle-dir (apigee--root-path-of-bundle))
         (bundle-type (apigee--type-of-bundle))
         (choice (apigee--prompt-user-with-policy-choices)))
-    (when choice
-      (let ((num-items (length choice)))
-        (when (eq num-items 2)
-          ;; policy-type (nth 0 choice)
-          ;; template-file (nth 1 choice)
-          (let ((policy-dir (concat bundle-dir bundle-type "/policies/"))
-                (ptype (symbol-name (nth 0 choice)))
-                (template-filename (nth 1 choice))
-                (have-name nil)
-                (policy-name-prompt "policy name: "))
-            (and (not (file-exists-p policy-dir))
-                 (make-directory policy-dir))
-            (let* ((default-value (apigee--suggested-policy-name ptype template-filename))
-                   (policy-name
-                    (let (n)
-                      (while (not have-name)
-                        (setq n (read-string policy-name-prompt default-value nil default-value)
-                              have-name (apigee--policy-name-is-available n)
-                              policy-name-prompt "That name is in use. Policy name: " ))
-                      n))
-                   (fullpath-template-filename
-                    (apigee--join-path-elements apigee--base-template-dir "policies" template-filename))
-                   (elaborated-contents
-                    (apigee--elaborate-template fullpath-template-filename policy-name)))
+    (when choice ;; is a cons cell
+      (let ((policy-dir (concat bundle-dir bundle-type "/policies/"))
+            (ptype (car choice))
+            (template-filename (cdr choice))
+            (have-name nil)
+            (policy-name-prompt "policy name: "))
+        (and (not (file-exists-p policy-dir))
+             (make-directory policy-dir))
+        (let* ((default-value (apigee--suggested-policy-name ptype template-filename))
+               (policy-name
+                (let (n)
+                  (while (not have-name)
+                    (setq n (read-string policy-name-prompt default-value nil default-value)
+                          have-name (apigee--policy-name-is-available n)
+                          policy-name-prompt "That name is in use. Policy name: " ))
+                  n))
+               (fullpath-template-filename
+                (apigee--join-path-elements apigee--base-template-dir "policies" ptype template-filename))
+               (elaborated-contents
+                (apigee--elaborate-template fullpath-template-filename policy-name)))
 
-              ;; create the file, expand the snippet, save it.
-              (find-file (concat policy-dir policy-name ".xml"))
-              ;; yas-expand-snippet-sync does not return until the snip is expanded.
-              (yas-expand-snippet-sync elaborated-contents (point) (point))
-              (save-buffer)
-              ;;(apigee-mode 1)
-              ;; here, optionally open the resource file, if any
-              (cond
-               ((or (string= ptype "JavaScript") (string= ptype "XSL") (string= ptype "Python"))
-                (save-excursion
-                  (goto-char (point-min))
-                  (if (re-search-forward "<ResourceURL>\\(jsc\\|xsl\\|py\\)://\\(.+\\)</ResourceURL>" (point-max) t)
-                      (let ((resource-type (match-string-no-properties 1))
-                            (resource-basename (match-string-no-properties 2)))
-                        (if resource-basename
-                            (let ((resource-dir
-                                   (concat bundle-dir bundle-type "/resources/" resource-type "/")))
-                              (and (not (file-exists-p resource-dir))
-                                   (make-directory resource-dir t))
-                              (find-file-other-window (concat resource-dir resource-basename))
-                              ;;(apigee--maybe-insert-base-content resource-basename resource-type)
-                              ;;(apigee-mode 1)
-                              ))))))
-               (t nil))
-              (kill-new policy-name)
-              (kill-new
-               (concat "        <Step>\n          <Name>" policy-name "</Name>\n        </Step>\n"))
-              (message "yank to add the step declaration...")
-              )))))))
+          ;; create the file, expand the snippet, save it.
+          (find-file (concat policy-dir policy-name ".xml"))
+          ;; yas-expand-snippet-sync does not return until the snip is expanded.
+          (yas-expand-snippet-sync elaborated-contents (point) (point))
+          (save-buffer)
+          ;;(apigee-mode 1)
+          ;; here, optionally open the resource file, if any
+          (cond
+           ((or (string= ptype "JavaScript") (string= ptype "XSL") (string= ptype "Python"))
+            (save-excursion
+              (goto-char (point-min))
+              (if (re-search-forward "<ResourceURL>\\(jsc\\|xsl\\|py\\)://\\(.+\\)</ResourceURL>" (point-max) t)
+                  (let ((resource-type (match-string-no-properties 1))
+                        (resource-basename (match-string-no-properties 2)))
+                    (if resource-basename
+                        (let ((resource-dir
+                               (concat bundle-dir bundle-type "/resources/" resource-type "/")))
+                          (and (not (file-exists-p resource-dir))
+                               (make-directory resource-dir t))
+                          (find-file-other-window (concat resource-dir resource-basename))
+                          ;;(apigee--maybe-insert-base-content resource-basename resource-type)
+                          ;;(apigee-mode 1)
+                          ))))))
+           (t nil))
+          (kill-new policy-name)
+          (kill-new
+           (concat "        <Step>\n          <Name>" policy-name "</Name>\n        </Step>\n"))
+          (message "yank to add the step declaration...")
+          )))))
 
 (defun apigee--is-policy-file (s)
   "returns true if the filename represents a policy file in the current
@@ -1371,6 +1388,16 @@ PROMPT-ARG - whether invoked with a prefix
 ;; restore last known state, and set a timer to persist state periodically
 (eval-after-load "apigee"
   '(progn
+
+     ;; override the impl in popup.el - it's broken for me for cascaded menus - 20230627-1541
+     (defun popup-child-point (popup &optional offset)
+       (overlay-end
+        (popup-line-overlay popup (popup-selected-line popup))))
+
+     ;; customize the popup font
+     (set-face-attribute 'popup-menu-face nil :height 105)
+     (set-face-attribute 'popup-menu-selection-face nil :height 105)
+
      (apigee--restore-state)
      (if (not apigee--base-template-dir)
          (setq apigee--base-template-dir (concat (file-name-directory apigee--load-file-name) "templates/")))

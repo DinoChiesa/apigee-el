@@ -1,0 +1,31 @@
+<Javascript name='##' timeLimit='200' >
+  <Source><![CDATA[
+
+  function onComplete(response, error) {
+    if (response) {
+      context.setVariable('example.status', response.status);
+    }
+    else {
+      context.setVariable('example.error', 'Whoops: ' + error);
+    }
+  }
+
+var params = {
+  client_id: clientid,
+  client_secret: clientsecret,
+  grant_type: "client_credentials",
+  scope: "https://graph.microsoft.com/.default"
+};
+var url = 'https://login.microsoftonline.com/[tenantid]/oauth2/v2.0/token';
+var headers = { 'content-type' : 'application/x-www-form-urlencoded' };
+var formstring = Object.keys(params)
+  .map(function (key) {
+    return key + "=" + encodeURIComponent(params[key]);
+  })
+  .join("&");
+var req = new Request(url, 'POST', headers, formstring);
+
+httpClient.send(req, onComplete);
+]]>
+  </Source>
+</Javascript>

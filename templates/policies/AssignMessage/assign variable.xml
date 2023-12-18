@@ -13,7 +13,8 @@
 
   <AssignVariable>
     <Name>formatString1</Name>
-    <Value>yyyy-MM-dd HH:mm:ss.SSS</Value> <!-- EEEE -->
+    <Value>yyyy-MM-dd HH:mm:ss.SSS</Value>
+    <!-- EEEE -->
   </AssignVariable>
   <AssignVariable>
     <Name>formattedTime</Name>
@@ -57,7 +58,6 @@
     <Template>{system.uuid}-{messageid}</Template>
   </AssignVariable>
 
-
   <AssignVariable>
     <Name>assigned</Name>
     <Template>{sha256Base64(abc_text)}</Template>
@@ -72,5 +72,4 @@
     <Name>assigned</Name>
     <Template>{randomLong(zero,plus_1000)}</Template>
   </AssignVariable>
-
 </AssignMessage>

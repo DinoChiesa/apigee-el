@@ -1,0 +1,7 @@
+<Quota name="##" type="calendar">
+  <!-- StartTime is expressed in UTC -->
+  <StartTime>2023-07-18 10:30:00</StartTime>
+  <Interval>1</Interval>
+  <TimeUnit>day</TimeUnit>
+  <Allow count="2000" countRef='variable_containing_count'/>
+</Quota>
