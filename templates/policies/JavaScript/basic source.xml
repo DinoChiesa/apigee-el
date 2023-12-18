@@ -1,4 +1,4 @@
-<Javascript name='##' timeLimit='200' >
+<Javascript name='##' timeLimit='200'>
   <!-- <DisplayName>${1:##}</DisplayName> -->
   <Properties>
     <!-- to retrieve properties in js code:   properties.prop1 -->

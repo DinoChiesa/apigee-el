@@ -1,9 +1,18 @@
 <OAuthV2 name='##'>
     <DisplayName>##</DisplayName>
     <Operation>VerifyAccessToken</Operation>
-    <!-- by default, pulls token from Authorization header as per OAuthV2.0 spec -->
-    <AccessToken>flow.variable</AccessToken>      <!-- Optional -->
-    <AccessTokenPrefix>Bearer</AccessTokenPrefix> <!-- Optional -->
+
+    <!-- By default, this policy pulls the token from the Authorization header
+         as per the OAuthV2.0 specs.
+         -->
+
+    <!-- Optionally, specify a different source for the token -->
+    <AccessToken>flow.variable</AccessToken>
+
+    <!-- Optional, only meaningful with the above element -->
+    <AccessTokenPrefix>Bearer</AccessTokenPrefix>
+
+    <!-- hard-coded scope to verify -->
     <Scope>xyz</Scope>
     <!--
     This policy sets the following flow variables:

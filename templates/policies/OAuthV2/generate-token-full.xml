@@ -59,44 +59,44 @@
       <Attribute name='attr_name2' ref='flow.variable2' display='true|false'>value2</Attribute>
     </Attributes>
 
+    <RFCCompliantRequestResponse>true</RFCCompliantRequestResponse>
     <GenerateResponse enabled='true'/>
     <!--
 
-    If you include GenerateResponse and have enabled='true', then
-    the response is sent directly to the caller. The payload looks like
-    this:
+      If you include <GenerateResponse enabled='true'>, then, on success,
+      the response is sent directly to the caller. The payload looks like
+      this:
 
-    {
-     \"issued_at\": \"1420262924658\",
-     \"scope\": \"READ\",
-     \"application_name\": \"ce1e94a2-9c3e-42fa-a2c6-1ee01815476b\",
-     \"refresh_token_issued_at\": \"1420262924658\",
-     \"status\": \"approved\",
-     \"refresh_token_status\": \"approved\",
-     \"api_product_list\": \"[PremiumWeatherAPI]\",
-     \"expires_in\": \"1799\",
-     \"developer.email\": \"tesla@weathersample.com\",
-     \"organization_id\": \"0\",
-     \"token_type\": \"BearerToken\",
-     \"refresh_token\": \"fYACGW7OCPtCNDEnRSnqFlEgogboFPMm\",
-     \"client_id\": \"5jUAdGv9pBouF0wOH5keAVI35GBtx3dT\",
-     \"access_token\": \"2l4IQtZXbn5WBJdL6EF7uenOWRsi\",
-     \"organization_name\": \"docs\",
-     \"refresh_token_expires_in\": \"0\",
-     \"refresh_count\": \"0\"
-    }
+      {
+        "access_token": "2l4IQtZXbn5WBJdL6EF7uenOWRsi",
+        "issued_at": "1420262924658",
+        "expires_in": "1799",
+        "scope": "READ",
+        ...
+      }
 
-    If you omit GenerateResponse or have enabled='false', then
-    these flow variables are set on success:
+      On failure, in some cases no fault is thrown and a response is sent
+      directly to the caller.
 
-      oauthv2accesstoken.##.access_token
-      oauthv2accesstoken.##.token_type
-      oauthv2accesstoken.##.expires_in
-      oauthv2accesstoken.##.refresh_token
-      oauthv2accesstoken.##.refresh_token_expires_in
-      oauthv2accesstoken.##.refresh_token_issued_at
-      oauthv2accesstoken.##.refresh_token_status
-    -->
+      If you omit GenerateResponse or include <GenerateResponse enabled='false'>,
+      then, on success, various flow variables are set. The names all have the prefix
+      oauthv2accesstoken.##
+
+      .access_token
+      .expires_in
+      .token_type
+      .expires_in
+      .refresh_token
+      .refresh_token_expires_in
+      .refresh_token_issued_at
+      .refresh_token_status
+      ...
+
+      and you must assemble and assign a response manually.
+
+      On Failure, a fault is thrown and can be handled by FaultRules.
+
+  -->
 
   <RFCCompliantRequestResponse>true</RFCCompliantRequestResponse>
 </OAuthV2>

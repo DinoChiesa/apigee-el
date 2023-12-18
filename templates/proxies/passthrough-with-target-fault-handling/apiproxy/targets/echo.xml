@@ -19,6 +19,6 @@
     <Flows/>
     <HTTPTargetConnection>
         <Properties/>
-        <URL>https://buoyant-climate-208500.appspot.com</URL>
+        <URL>https://echo.dchiesa.demo.altostrat.com</URL>
     </HTTPTargetConnection>
 </TargetEndpoint>
