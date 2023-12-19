@@ -1,17 +1,17 @@
 ;;; apigee.el --- utility functions for working with Apigee platform in emacs
 ;;
-;; Copyright (C) 2017-2021 Dino Chiesa and Google, LLC.
+;; Copyright (C) 2017-2023 Dino Chiesa and Google, LLC.
 ;;
 ;; Author     : Dino Chiesa
 ;; Maintainer : Dino Chiesa <dchiesa@google.com>
 ;; Created    : May 2017
-;; Modified   : February 2021
-;; Version    : 1.1
+;; Modified   : December 2023
+;; Version    : 1.2
 ;; Keywords   : apigee
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2023-December-18 14:24:44>
+;; Last-saved : <2023-December-18 17:28:34>
 ;;
 ;;; Commentary:
 ;;
@@ -44,7 +44,7 @@
 ;;
 ;;; License
 ;;
-;;    Copyright 2017-2021 Google LLC.
+;;    Copyright 2017-2023 Google LLC.
 ;;
 ;;    Licensed under the Apache License, Version 2.0 (the "License");
 ;;    you may not use this file except in compliance with the License.
@@ -87,6 +87,50 @@
   "a list of variables to store/restore in the settings file.")
 
 (defvar apigee--settings-file-base-name "apigee-edge.dat")
+
+(defvar apigee-commands-alist
+  (list
+   '(import "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
+   '(deploy "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
+   '(lint  "%apigeelint -s ./apiproxy -f visualstudio.js")
+   ))
+
+(defvar apigee-programs-alist
+  (list
+   '(apigeecli "~/path/to/apigeecli")
+   '(apigeelint "node ~/path/to/apigeelint/cli.js")
+   )
+)
+
+(add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
+(add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
+
+(add-to-list 'compilation-error-regexp-alist-alist
+     '(apigeelint-visualstudio-error-with-lines
+       "^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
+       2 3 4 2 1 ))
+;; to modify:
+;; (setf
+;;  (alist-get 'apigeelint-visualstudio-error-with-lines compilation-error-regexp-alist-alist)
+;;    '("^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
+;;     2 3 4 2 1 ))
+
+
+(add-to-list 'compilation-error-regexp-alist-alist
+     '(apigeelint-visualstudio-error-no-line
+       "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
+       2 3 nil 2 1 ))
+
+;; to modify:
+;; (setf
+;;  (alist-get 'apigeelint-visualstudio-error-no-line compilation-error-regexp-alist-alist)
+;;    '( "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
+;;     2 3 nil 2 1 ))
+
+
+(defvar apigee-gcloud-program "gcloud")
+(defvar apigee-organization "your-organization-here")
+(defvar apigee-environment "your-environment-here")
 
 (defvar apigee--load-file-name load-file-name
   "The name from which the Apigee module was loaded.")
@@ -750,6 +794,76 @@ Uses a counter that is indexed per policy type within each API Proxy.
                 pname (funcall next-name val)))
         pname))))
 
+(defun apigee-gcloud-auth-print-access-token ()
+  "return output of $(gcloud auth print-access-token)"
+  (let* ((gcloud-pgm apigee-gcloud-program)
+         (command-string (concat gcloud-pgm " auth print-access-token"))
+         (output (replace-regexp-in-string "\n$" "" (shell-command-to-string command-string)))
+         (lines (split-string output "\n")))
+       (car (last lines))))
+
+(defun apigee--proxy-name ()
+  "returns the short name for an API proxy"
+  (let ((bundle-dir (apigee--root-path-of-bundle))
+        (bundle-type (apigee--type-of-bundle)))
+    (if (s-equals? bundle-type "apiproxy")
+        (let* ((bundle-apiproxy-dir (concat bundle-dir bundle-type))
+               (file-list (apigee--proper-files bundle-apiproxy-dir ".xml"))
+               (proxy-defn-file (apigee--verify-exactly-one file-list bundle-apiproxy-dir)))
+          (apigee--trim-xml-suffix (file-name-nondirectory proxy-defn-file))))))
+
+(defun apigee--get-command (symbol)
+  "get the apigeelint command for the current API proxy."
+  (let ((cmd (car (alist-get symbol apigee-commands-alist))))
+    (when cmd
+      (let ((bundle-dir (apigee--root-path-of-bundle))
+            (bundle-type (apigee--type-of-bundle))
+            (proxy-name (apigee--proxy-name)))
+        (mapcar (lambda (element)
+                        (let ((key (car element))
+                              (value (cadr element)))
+                          (setq cmd (replace-regexp-in-string (concat "%" (symbol-name key)) value cmd))))
+                apigee-programs-alist)
+        (setq cmd (replace-regexp-in-string "%n" proxy-name cmd))
+        (setq cmd (replace-regexp-in-string "%o" apigee-organization cmd))
+        (setq cmd (replace-regexp-in-string "%e" apigee-environment cmd))
+        (setq cmd (replace-regexp-in-string "%t" (apigee-gcloud-auth-print-access-token) cmd))))))
+
+(defun apigee--run-command-for-proxy (label command-symbol)
+  "Run a command for the current API proxy."
+  (let ((bundle-dir (apigee--root-path-of-bundle))
+        (proxy-name (apigee--proxy-name))
+        (cmd (apigee--get-command command-symbol)))
+    (let ((name-function (lambda (mode) (concat "*" label " - " proxy-name "*")))
+          highlight-regexp)
+      (when cmd
+        (let ((buf
+               (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)))
+          (with-current-buffer buf
+            ;; obscure any token that appears
+            (save-excursion
+              (beginning-of-buffer)
+              (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+                (replace-match "--token xxxx")))
+            (setq buffer-read-only t)))))))
+
+(defun apigee-lint-proxy ()
+  "Run apigeelint on the API proxy."
+  (interactive)
+  (apigee--run-command-for-proxy "apigeelint" 'lint))
+
+(defun apigee-import-proxy ()
+  "Import the API proxy."
+  (interactive)
+  (apigee--run-command-for-proxy "apigeecli" 'import))
+
+(defun apigee-deploy-proxy ()
+  "Deploy the API proxy. This doesn't use the proxy configuration in the
+filesystem, beyond the name. It's assumed you've recently called
+`apigee-import-proxy', and there is a revision to deploy."
+  (interactive)
+  (apigee--run-command-for-proxy "apigeecli" 'deploy))
+
 (defun apigee-inject-proxy-revision-logic ()
   "Inject the policies and flow to insert a proxy revision header
 into the response. Handy when modifying an existing proxy that
@@ -1172,7 +1286,9 @@ is visiting a policy file. otherwise nil."
            (message "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
       (if (not (= (length file-list) 1))
           (error
-           (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir))))
+           (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
+      (nth 0 file-list))
+
 
 (defun apigee--copy-subdirs (subdirs source-dir dest-dir)
   (while subdirs
