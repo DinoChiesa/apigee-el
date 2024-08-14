@@ -6,6 +6,7 @@
   function onComplete(response, error) {
     if (response) {
       context.setVariable('example.status', response.status);
+      // also see response.headers, response.content
     }
     else {
       context.setVariable('example.error', 'Whoops: ' + error);
@@ -21,7 +22,8 @@
         'Authorization' : 'Bearer xyz'
       };
   var url = 'https://example.com/path2';
-  var req = new Request(url, 'POST', headers, payload);
+  var method = 'POST';
+  var req = new Request(url, method, headers, payload);
 
   httpClient.send(req, onComplete);
   </Source>

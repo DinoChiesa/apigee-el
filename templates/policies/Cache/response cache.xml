@@ -10,10 +10,10 @@
         <ExpiryDate/>
         <TimeOfDay/>
       -->
-      <TimeoutInSec ref="${4:flow.variable.here}">120</TimeoutInSec>
+      <TimeoutInSeconds ref="${4:flow.variable.here}">120</TimeoutInSeconds>
     </ExpirySettings>
     <CacheLookupTimeoutInSeconds/>
-    <ExcludeErrorResponse/>
+    <ExcludeErrorResponse>true</ExcludeErrorResponse>
     <SkipCacheLookup>request.verb != "GET"</SkipCacheLookup>
     <SkipCachePopulation>request.verb != "GET"</SkipCachePopulation>
     <!--

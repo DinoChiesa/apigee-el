@@ -1,0 +1,11 @@
+<AssignMessage name='##'>
+  <AssignVariable>
+    <Name>json_path_1</Name>
+    <Target>$.keys[?(@.kid == '{target-kid}')]</Target>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>jwk</Name>
+    <Value>BADDBEEF</Value>
+    <Template>{jsonPath(json_path_1,json_value_1)}</Template>
+  </AssignVariable>
+</AssignMessage>

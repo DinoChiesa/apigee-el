@@ -9,9 +9,11 @@
       omit the identifier.
   -->
   <!-- <Identifier ref='client_id' /> -->
-  <Distributed>true</Distributed>
-  <Synchronous>false</Synchronous>
+
+  <Allow count='3'/>
   <Interval>1</Interval>
   <TimeUnit>minute</TimeUnit>
-  <Allow count='3' countRef='variable_containing_count'/>
+
+  <Distributed>true</Distributed>
+  <Synchronous>false</Synchronous>
 </Quota>

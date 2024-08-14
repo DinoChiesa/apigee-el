@@ -12,4 +12,5 @@
     <TimeoutInSeconds ref='duration_variable'>864000</TimeoutInSeconds> <!-- 864000 = 10 days -->
     <ExpiryDate ref='date_variable'>mm-dd-yyyy</ExpiryDate>
   </ExpirySettings>
+  <ExcludeErrorResponse>true</ExcludeErrorResponse>
 </PopulateCache>

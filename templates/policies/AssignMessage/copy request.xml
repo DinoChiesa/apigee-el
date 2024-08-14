@@ -1,0 +1,9 @@
+<AssignMessage name='##'>
+  <AssignTo createNew='true' type='request'>${1:outboundRequest}</AssignTo>
+  <Copy source='${2:request}'>
+    <QueryParams/>
+    <Headers/>
+    <Payload/>
+    <Path/>
+  </Copy>
+</AssignMessage>

@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2023-December-18 17:28:34>
+;; Last-saved : <2024-August-14 09:47:24>
 ;;
 ;;; Commentary:
 ;;
@@ -89,26 +89,41 @@
 (defvar apigee--settings-file-base-name "apigee-edge.dat")
 
 (defvar apigee-commands-alist
-  (list
-   '(import "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
-   '(deploy "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
-   '(lint  "%apigeelint -s ./apiproxy -f visualstudio.js")
+  '(
+   (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
+   (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
+   (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
+   (lint .  "%apigeelint -s . -e TD002,TD007 -f visualstudio.js")
    ))
 
 (defvar apigee-programs-alist
-  (list
-   '(apigeecli "~/path/to/apigeecli")
-   '(apigeelint "node ~/path/to/apigeelint/cli.js")
-   )
-)
+  '(
+    (gcloud . "~/path/to/gcloud")
+    (apigeecli . "~/path/to/apigeecli")
+    (apigeelint . "node ~/path/to/apigeelint/cli.js")
+    )
+  "users should set these in their emacs init file, via, for example,
+  (setf (alist-get 'apigeecli apigee-programs-alist)
+           \"~/.apigeecli/bin/apigeecli\")"
+  )
+
+(defvar apigee-placeholders-alist
+  '(
+    (n . proxy-name)
+    (o . (apigee-get-organization want-prompt))
+    (e . (apigee-get-environment want-prompt))
+    (t . (apigee-gcloud-auth-print-access-token))
+    )
+  )
 
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
 
 (add-to-list 'compilation-error-regexp-alist-alist
-     '(apigeelint-visualstudio-error-with-lines
-       "^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
-       2 3 4 2 1 ))
+             '(apigeelint-visualstudio-error-with-lines
+               "^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
+               2 3 4 2 1 ))
+
 ;; to modify:
 ;; (setf
 ;;  (alist-get 'apigeelint-visualstudio-error-with-lines compilation-error-regexp-alist-alist)
@@ -117,9 +132,9 @@
 
 
 (add-to-list 'compilation-error-regexp-alist-alist
-     '(apigeelint-visualstudio-error-no-line
-       "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
-       2 3 nil 2 1 ))
+             '(apigeelint-visualstudio-error-no-line
+               "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
+               2 3 nil 2 1 ))
 
 ;; to modify:
 ;; (setf
@@ -128,9 +143,10 @@
 ;;     2 3 nil 2 1 ))
 
 
-(defvar apigee-gcloud-program "gcloud")
-(defvar apigee-organization "your-organization-here")
-(defvar apigee-environment "your-environment-here")
+(defvar apigee-organization "your-organization-here"
+  "The organization to use for deployments.")
+(defvar apigee-environment "your-environment-here"
+  "The environment to use for deployments.")
 
 (defvar apigee--load-file-name load-file-name
   "The name from which the Apigee module was loaded.")
@@ -251,18 +267,18 @@
   "function expected to be called on initial module load, that restores the previous state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
   (let ((dat-file-path (apigee--path-to-settings-file)))
     (if (file-exists-p dat-file-path)
-    (with-temp-buffer
-      (insert-file-contents dat-file-path)
-      (save-excursion
-        (goto-char (point-min))
-        (let ((settings-data (read (current-buffer))))
-          (dolist (one-setting settings-data)
-            (let ((setting-name (car one-setting)))
-              (if (and
-                   (member setting-name apigee--list-of-vars-to-store-and-restore)
-                   (cadr one-setting))
-                  (set (intern setting-name) (cadr one-setting))))))))
-    )))
+        (with-temp-buffer
+          (insert-file-contents dat-file-path)
+          (save-excursion
+            (goto-char (point-min))
+            (let ((settings-data (read (current-buffer))))
+              (dolist (one-setting settings-data)
+                (let ((setting-name (car one-setting)))
+                  (if (and
+                       (member setting-name apigee--list-of-vars-to-store-and-restore)
+                       (cadr one-setting))
+                      (set (intern setting-name) (cadr one-setting))))))))
+      )))
 
 (defun apigee--persist-state ()
   "function expected to be called periodically to store the state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
@@ -309,25 +325,25 @@ does not end with a slash causes it to use the parent directory.
 (defun apigee--proper-subdirs (containing-dir)
   "Return list of full paths of proper subdirs found in CONTAINING-DIR."
   (seq-remove (lambda (file)
-               (let ((clean-name (file-name-nondirectory file)))
-                 (or (string-match "^\\." clean-name)
-                     (string-match "node_modules" clean-name)
-                     (not (file-directory-p file)))))
-             (directory-files containing-dir t)))
+                (let ((clean-name (file-name-nondirectory file)))
+                  (or (string-match "^\\." clean-name)
+                      (string-match "node_modules" clean-name)
+                      (not (file-directory-p file)))))
+              (directory-files containing-dir t)))
 
 (defun apigee--proper-files (containing-dir &optional suffix)
   "Return list of full paths of proper files found in CONTAINING-DIR.
 Optionally filters on files with the given extension or SUFFIX."
   (seq-remove (lambda (file)
-               (let ((clean-name (file-name-nondirectory file)))
-                 (or
-                  (and suffix
-                       (not (s-ends-with? suffix clean-name)))
-                  (string-match "^\\." clean-name)
-                  (string-match "^#.*#$" clean-name)
-                  (string-match "~$" clean-name)
-                  (file-directory-p file))))
-             (directory-files containing-dir t)))
+                (let ((clean-name (file-name-nondirectory file)))
+                  (or
+                   (and suffix
+                        (not (s-ends-with? suffix clean-name)))
+                   (string-match "^\\." clean-name)
+                   (string-match "^#.*#$" clean-name)
+                   (string-match "~$" clean-name)
+                   (file-directory-p file))))
+              (directory-files containing-dir t)))
 
 (defun apigee--sort-strings (strings)
   "lexicographically sort a list of STRINGS"
@@ -350,9 +366,9 @@ lexicographically by the car of each element, which is a string."
 
 (defun apigee--get-template-contents (fullpath-template-filename)
   "return the contents of the template file."
-    (with-temp-buffer
-      (insert-file-contents fullpath-template-filename)
-      (buffer-substring-no-properties (point-min) (point-max))))
+  (with-temp-buffer
+    (insert-file-contents fullpath-template-filename)
+    (buffer-substring-no-properties (point-min) (point-max))))
 
 (defun apigee--templates-for-one-policy-type (policy-type-directory)
   "loads the policy templates for one POLICY-TYPE-DIRECTORY, which is a fully-qualified
@@ -368,8 +384,8 @@ populate the menu of available policy templates."
   "returns the total number of policy templates available in
 `apigee--policy-template-alist'"
   (apply '+
-          (mapcar (lambda (item) (length (cadr item)))
-                  apigee--policy-template-alist)))
+         (mapcar (lambda (item) (length (cadr item)))
+                 apigee--policy-template-alist)))
 
 (defun apigee--load-asset-templates (sym label subdir)
   "Load templates for a kind of asset from the template dir, then set the symbol to the alist."
@@ -420,13 +436,13 @@ to fill in for a new policy.
   (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "policies")))
     (setq
      apigee--policy-template-alist
-        (let (template-list)
-          (dolist (policy-type (apigee--proper-subdirs top-level-dir))
-            (push
-             (apigee--templates-for-one-policy-type policy-type)
-             template-list)
-            (and apigee--verbose-logging (message "policy type %s" policy-type)))
-          (reverse (apigee--sort-by-string-car template-list))))
+     (let (template-list)
+       (dolist (policy-type (apigee--proper-subdirs top-level-dir))
+         (push
+          (apigee--templates-for-one-policy-type policy-type)
+          template-list)
+         (and apigee--verbose-logging (message "policy type %s" policy-type)))
+       (reverse (apigee--sort-by-string-car template-list))))
     (list "policy" (apigee--policy-template-count) top-level-dir)))
 
 
@@ -438,15 +454,15 @@ The name of the file will be the name of the template in the resulting menu.
 "
   (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "targets" )))
     (setq apigee--target-template-alist
-         (let (template-list)
-           (dolist (template-fname (apigee--proper-files top-level-dir ".xml"))
-             (push
-              (list (apigee--trim-xml-suffix (file-name-nondirectory template-fname)) template-fname)
-              template-list)
-             (and apigee--verbose-logging (message "target template %s" template-fname)))
-           (let ((v (length template-list)))
-             (message "length of list %d" v))
-           (reverse (apigee--sort-by-string-car template-list))))
+          (let (template-list)
+            (dolist (template-fname (apigee--proper-files top-level-dir ".xml"))
+              (push
+               (list (apigee--trim-xml-suffix (file-name-nondirectory template-fname)) template-fname)
+               template-list)
+              (and apigee--verbose-logging (message "target template %s" template-fname)))
+            (let ((v (length template-list)))
+              (message "length of list %d" v))
+            (reverse (apigee--sort-by-string-car template-list))))
     (list "target" (length apigee--target-template-alist) top-level-dir)))
 
 
@@ -476,6 +492,54 @@ Within each of those, there will be templates for those entities.
                 results
                 ", ")
                top-level-dir))))
+
+(defun apigee-get-organization (&optional want-prompt)
+  (interactive "P")
+  (let
+      ((org-local
+        (if
+            (or want-prompt
+                (not apigee-organization))
+            (read-string "organization name: ")
+          apigee-organization)))
+    (setq apigee-organization org-local)))
+
+(defun apigee-get-environment (&optional want-prompt)
+  (interactive "P")
+  (let
+      ((env-local
+        (if
+            (or want-prompt
+                (not apigee-environment))
+            (read-string "environment name: ")
+          apigee-environment)))
+    (setq apigee-environment env-local)))
+
+
+
+
+;; (if
+;;     (apigee--prompt-for-containing-dir)
+;;            (or (car (apigee--fresh-recent-asset-homes nil)) (apigee--prompt-for-containing-dir)))))
+;;
+;;  (let* ((org-local
+;;          (or apigee-organization
+;;              (read-string "organization name: ")))
+;;         (env-local
+;;          (or apigee-environment
+;;              (read-string "environment name: ")))
+;;         )
+;;    (list org-local env-local)))
+;;
+;;    (if (and org env)
+;;        (progn
+;;          (setq apigee-organization org
+;;                apigee-environment env)
+;;          )
+;;      )
+;;    )
+
+
 
 (defun apigee--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
@@ -547,11 +611,11 @@ It always ends in slash.
 Based on file availability."
   (let ((val 1)
         (next-name (lambda (v) (concat template-name "-" (format "%d" v)))))
-      (let ((tname (funcall next-name val)))
-        (while (not (apigee--target-name-is-available tname))
-          (setq val (1+ val)
-                tname (funcall next-name val)))
-        tname)))
+    (let ((tname (funcall next-name val)))
+      (while (not (apigee--target-name-is-available tname))
+        (setq val (1+ val)
+              tname (funcall next-name val)))
+      tname)))
 
 
 ;;;###autoload
@@ -562,10 +626,10 @@ choose a target type to insert.
   (interactive)
   (let ((apiproxy-dir (apigee--root-path-of-bundle))
         (template-name
-           (ido-completing-read
-            (format "target template: ")
-            (mapcar (lambda (x) (car x)) apigee--target-template-alist)
-            nil nil nil)))
+         (ido-completing-read
+          (format "target template: ")
+          (mapcar (lambda (x) (car x)) apigee--target-template-alist)
+          nil nil nil)))
     (when template-name
       (let ((target-dir (concat apiproxy-dir "apiproxy/targets/"))
             (have-name nil)
@@ -573,35 +637,35 @@ choose a target type to insert.
             (choice (assoc template-name apigee--target-template-alist)))
         (let* ((template-filename (nth 1 choice))
                (source-target-template-filename
-                 (apigee--get-target-template-filename template-filename)))
+                (apigee--get-target-template-filename template-filename)))
           (and (not (file-exists-p target-dir))
                (make-directory target-dir))
 
           ;;(asset-name (read-string (format "%s name?: " asset-type) default-value nil default-value)))
 
-            (let* ((default-value (apigee--suggested-target-name template-name))
-                  (target-name
-                   (let (n)
-                     (while (not have-name)
-                       (setq n (read-string target-name-prompt default-value nil default-value)
-                             have-name (apigee--target-name-is-available n)
-                             target-name-prompt "That name is in use. Target name: " ))
-                      n))
-                  (elaborated-contents
-                   (apigee--elaborate-template
-                    ;; does this need to be qualified as fullpath?
-                    source-target-template-filename target-name)))
+          (let* ((default-value (apigee--suggested-target-name template-name))
+                 (target-name
+                  (let (n)
+                    (while (not have-name)
+                      (setq n (read-string target-name-prompt default-value nil default-value)
+                            have-name (apigee--target-name-is-available n)
+                            target-name-prompt "That name is in use. Target name: " ))
+                    n))
+                 (elaborated-contents
+                  (apigee--elaborate-template
+                   ;; does this need to be qualified as fullpath?
+                   source-target-template-filename target-name)))
 
-              ;; create the file, expand the snippet, save it.
-              (find-file (concat target-dir target-name ".xml"))
-              ;; yas-expand-snippet-sync does not return until the snip is expanded.
-              (yas-expand-snippet-sync elaborated-contents (point) (point))
-              (save-buffer)
-              ;; here, optionally open the resource file, if any
-              (kill-new
-               (concat "<RouteRule name='foo'><Target>" target-name "</Target></RouteRule>"))
-              (message "yank to add the RouteRule declaration...")
-              ))))))
+            ;; create the file, expand the snippet, save it.
+            (find-file (concat target-dir target-name ".xml"))
+            ;; yas-expand-snippet-sync does not return until the snip is expanded.
+            (yas-expand-snippet-sync elaborated-contents (point) (point))
+            (save-buffer)
+            ;; here, optionally open the resource file, if any
+            (kill-new
+             (concat "<RouteRule name='foo'><Target>" target-name "</Target></RouteRule>"))
+            (message "yank to add the RouteRule declaration...")
+            ))))))
 
 
 (defun apigee--generate-policy-menu ()
@@ -690,8 +754,8 @@ of available policies.
   ;; x-popup-menu crashes on emacs 28.1
   ;; or, maybe it was because I was using it incorrectly.
   ;; as of 20231218-1424, it seems to be working correctly.
-   (x-popup-menu (apigee--get-menu-position)
-                 (apigee--generate-policy-menu))
+  (x-popup-menu (apigee--get-menu-position)
+                (apigee--generate-policy-menu))
 
 
 
@@ -771,8 +835,8 @@ if no file exists by that name in the given proxy.
                                  (if is-jwt (seq-drop name-elements 1) name-elements)
                                  "-"))
          (name-prefix (if is-jwt
-                    (concat (s-capitalize (car name-elements)) ptype)
-                    (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
+                          (concat (s-capitalize (car name-elements)) ptype)
+                        (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
     (list name-prefix name-suffix)))
 
 (defun apigee--suggested-policy-name (ptype filename)
@@ -796,11 +860,12 @@ Uses a counter that is indexed per policy type within each API Proxy.
 
 (defun apigee-gcloud-auth-print-access-token ()
   "return output of $(gcloud auth print-access-token)"
-  (let* ((gcloud-pgm apigee-gcloud-program)
+  (let* ((gcloud-pgm
+          (alist-get 'gcloud apigee-programs-alist))
          (command-string (concat gcloud-pgm " auth print-access-token"))
          (output (replace-regexp-in-string "\n$" "" (shell-command-to-string command-string)))
          (lines (split-string output "\n")))
-       (car (last lines))))
+    (car (last lines))))
 
 (defun apigee--proxy-name ()
   "returns the short name for an API proxy"
@@ -812,28 +877,43 @@ Uses a counter that is indexed per policy type within each API Proxy.
                (proxy-defn-file (apigee--verify-exactly-one file-list bundle-apiproxy-dir)))
           (apigee--trim-xml-suffix (file-name-nondirectory proxy-defn-file))))))
 
-(defun apigee--get-command (symbol)
+(defun apigee--get-command (symbol want-prompt)
   "get the apigeelint command for the current API proxy."
-  (let ((cmd (car (alist-get symbol apigee-commands-alist))))
+  (let ((cmd (alist-get symbol apigee-commands-alist)))
     (when cmd
       (let ((bundle-dir (apigee--root-path-of-bundle))
             (bundle-type (apigee--type-of-bundle))
-            (proxy-name (apigee--proxy-name)))
-        (mapcar (lambda (element)
-                        (let ((key (car element))
-                              (value (cadr element)))
-                          (setq cmd (replace-regexp-in-string (concat "%" (symbol-name key)) value cmd))))
-                apigee-programs-alist)
-        (setq cmd (replace-regexp-in-string "%n" proxy-name cmd))
-        (setq cmd (replace-regexp-in-string "%o" apigee-organization cmd))
-        (setq cmd (replace-regexp-in-string "%e" apigee-environment cmd))
-        (setq cmd (replace-regexp-in-string "%t" (apigee-gcloud-auth-print-access-token) cmd))))))
+            (proxy-name (apigee--proxy-name))
+            (fn1 (lambda (acc cur)
+                   (let* ((key (car cur))
+                          (replaceable (concat "%" (symbol-name key))))
+                     (if (s-contains? replaceable acc)
+                         (replace-regexp-in-string replaceable (cdr cur) acc)
+                       acc))))
+            (fn2 (lambda (acc cur)
+                   (let* ((key (car cur))
+                          (replaceable (concat "%" (symbol-name key)))
+                          (val (cdr cur)))
+                     (if (s-contains? replaceable acc)
+                         (replace-regexp-in-string replaceable (eval val t) acc)
+                       acc)))))
 
-(defun apigee--run-command-for-proxy (label command-symbol)
+        (setq cmd
+              (seq-reduce
+               fn1
+               apigee-programs-alist
+               cmd))
+
+        ;; I had trouble using this seq-reduce, when using edebug-defun.
+        ;; But in my experience, when NOT using the debugger, it works as intended.
+        ;; Womp womp.
+        (seq-reduce fn2 apigee-placeholders-alist cmd)))))
+
+(defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy."
   (let ((bundle-dir (apigee--root-path-of-bundle))
         (proxy-name (apigee--proxy-name))
-        (cmd (apigee--get-command command-symbol)))
+        (cmd (apigee--get-command command-symbol want-prompt)))
     (let ((name-function (lambda (mode) (concat "*" label " - " proxy-name "*")))
           highlight-regexp)
       (when cmd
@@ -844,25 +924,30 @@ Uses a counter that is indexed per policy type within each API Proxy.
             (save-excursion
               (beginning-of-buffer)
               (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-                (replace-match "--token xxxx")))
+                (replace-match "--token ***masked***")))
             (setq buffer-read-only t)))))))
 
-(defun apigee-lint-proxy ()
+(defun apigee-lint-asset ()
   "Run apigeelint on the API proxy."
   (interactive)
   (apigee--run-command-for-proxy "apigeelint" 'lint))
 
-(defun apigee-import-proxy ()
-  "Import the API proxy."
-  (interactive)
-  (apigee--run-command-for-proxy "apigeecli" 'import))
+(defun apigee-import-and-deploy-proxy (have-prefix)
+  "Import AND deploy the API proxy."
+  (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy have-prefix))
 
-(defun apigee-deploy-proxy ()
+(defun apigee-import-proxy (have-prefix)
+  "Import the API proxy."
+  (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (apigee--run-command-for-proxy "apigeecli" 'import have-prefix))
+
+(defun apigee-deploy-proxy (have-prefix)
   "Deploy the API proxy. This doesn't use the proxy configuration in the
 filesystem, beyond the name. It's assumed you've recently called
 `apigee-import-proxy', and there is a revision to deploy."
-  (interactive)
-  (apigee--run-command-for-proxy "apigeecli" 'deploy))
+  (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (apigee--run-command-for-proxy "apigeecli" 'deploy have-prefix))
 
 (defun apigee-inject-proxy-revision-logic ()
   "Inject the policies and flow to insert a proxy revision header

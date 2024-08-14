@@ -1,6 +1,7 @@
 <OAuthV2 name='##'>
     <DisplayName>##</DisplayName>
     <Operation>VerifyAccessToken</Operation>
+    <CacheExpiryInSeconds>40</CacheExpiryInSeconds>
 
     <!-- By default, this policy pulls the token from the Authorization header
          as per the OAuthV2.0 specs.
@@ -29,7 +30,8 @@
       status
       scope
       apiproduct.name*
-      apiproduct.{custom_attribute_name}*
-      app.{custom-attribute-name}*
-    -->
+      apiproduct.NAME_OF_CUSTOM_ATTR_ON_PRODUCT
+      apiproduct.operation.attributes.NAME_OF_CUSTOM_ATTR_ON_OPERATION
+      app.NAME_OF_CUSTOM_ATTRIBUTE_ON_APP
+     -->
 </OAuthV2>

@@ -4,6 +4,7 @@
       <Header name='Host'/>
       <Header name='Accept'/>
       <Header name='Authorization'/>
+      <Header name='Origin'/>
       <Header name='user-agent'/>
       <Header name='X-Request-id'/>
       <Header name='x-client-data'/>

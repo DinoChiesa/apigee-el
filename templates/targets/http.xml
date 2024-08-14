@@ -11,12 +11,20 @@
     </PostFlow>
     <Flows/>
     <HTTPTargetConnection>
-        <Properties/>
-        <SSLInfo>
-          <Enabled>true</Enabled>
-          <CommonName wildcardMatch="false">buoyant-climate-208500.appspot.com</CommonName>
-          <TrustStore>ref://myTrustStoreRef</TrustStore>
-        </SSLInfo>
-        <URL>https://buoyant-climate-208500.appspot.com</URL>
+
+      <Properties/>
+
+      <SSLInfo>
+        <Enabled>true</Enabled>
+        <Enforce>true</Enforce>
+
+        <CommonName
+            wildcardMatch="false">echo.dchiesa.demo.altostrat.com</CommonName>
+
+        <TrustStore>ref://myTrustStoreRef</TrustStore>
+      </SSLInfo>
+
+        <!-- unless target.url is set in the target pre-flow -->
+        <URL>https://echo.dchiesa.demo.altostrat.com</URL>
     </HTTPTargetConnection>
 </TargetEndpoint>

@@ -1,10 +1,10 @@
 <GenerateSAMLAssertion name="##" ignoreContentType="false">
+<GenerateSAMLAssertion name="SAML-Generate-Signed-Response" ignoreContentType="true">
 
   <!--
       <CanonicalizationAlgorithm></CanonicalizationAlgorithm>
   -->
-
-  <!-- issuer and subject values -->
+  <!-- issuer and subject values; may used fixed value or ref, not both -->
   <Issuer ref='varname'>${1:urn://18CF315A-6A9A-481F-93B8-C1AB988A7D49}</Issuer>
   <Subject ref='varname'>${2:subject}</Subject>
 
@@ -14,36 +14,73 @@
 
   <!-- the key and cert for signing -->
   <KeyStore>
-    <Name>20191028-rzt9q2ppa6e</Name>
-    <Alias>key1</Alias> <!-- cert and key -->
+    <Name ref="propertyset.settings.saml_keystore"></Name>
+    <Alias ref="propertyset.settings.saml_keyalias"></Alias>
   </KeyStore>
 
   <!-- where to put the assertion -->
   <OutputVariable>
-    <Message name="request">
+    <FlowVariable>assertion.content</FlowVariable>
+
+    <!-- existing message to start from -->
+    <Message name="assertion">
       <Namespaces>
-        <Namespace prefix="soap">http://schemas.xmlsoap.org/soap/envelope/</Namespace>
-        <Namespace prefix="wsse">http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd</Namespace>
+        <Namespace prefix="samlp">urn:oasis:names:tc:SAML:2.0:protocol</Namespace>
       </Namespaces>
-      <!-- this node must exist in the document -->
-      <XPath>/soap:Envelope/soap:Header/wsse:Security</XPath>
+      <!-- This XPath must identify an existing element in the document. -->
+      <!-- The assertion will be inserted as a new child of this element. -->
+      <XPath>/samlp:Response</XPath>
     </Message>
   </OutputVariable>
 
-  <!-- the content of the assertion. -->
-  <!-- if you omit the Template, Apigee will use a default template for the Assertion. -->
-  <Template ignoreUnresolvedVariables="false">
+
+  <!-- Further notes:
+
+In the case of bearer assertions, the <saml:SubjectConfirmation> element MUST
+include a <saml:SubjectConfirmationData> element containing a NotOnOrAfter XML
+attribute, and optionally containing a NotBefore attribute, to limit the use of
+the assertion, typically to a very short window of time, although
+the exact duration may be use case dependent.
+
+  -->
+
+  <!-- The content of the assertion. -->
+  <!-- Confoundingly, this MUST BE wrapped in a CDATA section. -->
+  <Template ignoreUnresolvedVariables="false"><![CDATA[
     <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-                    ID="{saml.id}" Version="2.0" IssueInstant="{saml.issueInstant}">
-      <saml:Issuer>{saml.issuer}</saml:Issuer>
+                    ID="{messageid}"
+                    Version="2.0"
+                    IssueInstant="{issue_instant}">
+      <saml:Issuer>{idp_issuer}</saml:Issuer>
       <saml:Subject>
-        <saml:NameID Format="{saml.subjectFormat}">{saml.subject}</saml:NameID>
+        <saml:NameID
+            Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">{jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.email}</saml:NameID>
+        <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+          <saml:SubjectConfirmationData
+              NotOnOrAfter="{session.expiry}"
+              Recipient="{session.ACSURL}"
+              InResponseTo="{session.login_assertion_id}"/>
+        </saml:SubjectConfirmation>
       </saml:Subject>
-      <saml:AuthnStatement AuthnInstant="{saml.authnInstant}" SessionIndex="{saml.authnSessionIndex}">
+      <saml:Conditions NotBefore="{session.request_issue_instant}" NotOnOrAfter="{session.expiry}">
+        <saml:AudienceRestriction>
+          <saml:Audience>{session.request_issuer}</saml:Audience>
+        </saml:AudienceRestriction>
+      </saml:Conditions>
+      <saml:AuthnStatement AuthnInstant="{issue_instant}" SessionIndex="{saml.authnSessionIndex}">
         <saml:AuthnContext>
-          <saml:AuthnContextClassRef>{saml.authnContextClassRef}</saml:AuthnContextClassRef>
+          <saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef>
         </saml:AuthnContext>
       </saml:AuthnStatement>
+      <saml:AttributeStatement>
+        <saml:Attribute Name="uid" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+          <saml:AttributeValue>{jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.user_id}</saml:AttributeValue>
+        </saml:Attribute>
+        <saml:Attribute Name="mail" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">
+          <saml:AttributeValue>{jwt.VerifyJWT-Firebase-Id-Token.decoded.claim.email}</saml:AttributeValue>
+        </saml:Attribute>
+      </saml:AttributeStatement>
     </saml:Assertion>
-  </Template>
+]]></Template>
+
 </GenerateSAMLAssertion>

@@ -5,6 +5,7 @@
       <Header name='Accept'/>
       <Header name='Authorization'/>
       <Header name='user-agent'/>
+      <Header name='Origin'/>
       <Header name='X-Request-id'/>
       <Header name='X-Powered-By'/>
       <Header name='X-b3-traceid'/>

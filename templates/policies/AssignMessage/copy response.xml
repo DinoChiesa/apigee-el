@@ -1,0 +1,8 @@
+<AssignMessage name='##'>
+  <AssignTo createNew='false' type='response'>${1:response}</AssignTo>
+  <Copy source='${2:calloutResponse}'>
+    <Headers/>
+    <Payload/>
+    <StatusCode/>
+  </Copy>
+</AssignMessage>

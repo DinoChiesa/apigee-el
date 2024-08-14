@@ -9,6 +9,7 @@
        <FormParam name='password'>ILoveAPIs</FormParam>
      </FormParams>
      <Verb>POST</Verb>
+     <Path>/v2/entries:write</Path>
     </Set>
   </Request>
   <Response>userAuthResponse</Response>
@@ -20,6 +21,6 @@
     <Properties>
       <Property name='success.codes'>2xx, 3xx, 4xx, 5xx</Property>
     </Properties>
-    <URL>https://devjam3-20170405.appspot.com/auth</URL>
+    <URL>https://logging.googleapis.com</URL>
   </HTTPTargetConnection>
 </ServiceCallout>

@@ -1,5 +1,4 @@
 <AssignMessage name="##">
-  <AssignTo createNew="false" type="response"/>
   <Set>
     <Headers>
       <Header name="X-RateLimit-Limit">{ratelimit.QuotaPolicy.allowed.count}</Header>
