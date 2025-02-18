@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2024-August-14 09:47:24>
+;; Last-saved : <2025-February-18 22:04:09>
 ;;
 ;;; Commentary:
 ;;
@@ -64,6 +64,7 @@
 (require 'seq)
 (require 'popup)
 (require 'xml)
+(require 'compile)
 (require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
 
@@ -90,11 +91,11 @@
 
 (defvar apigee-commands-alist
   '(
-   (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
-   (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
-   (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
-   (lint .  "%apigeelint -s . -e TD002,TD007 -f visualstudio.js")
-   ))
+    (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
+    (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
+    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
+    (lint .  "%apigeelint -s . -e TD002,TD007 -f visualstudio.js")
+    ))
 
 (defvar apigee-programs-alist
   '(
@@ -143,9 +144,9 @@
 ;;     2 3 nil 2 1 ))
 
 
-(defvar apigee-organization "your-organization-here"
+(defvar apigee-organization nil
   "The organization to use for deployments.")
-(defvar apigee-environment "your-environment-here"
+(defvar apigee-environment nil
   "The environment to use for deployments.")
 
 (defvar apigee--load-file-name load-file-name
@@ -1006,7 +1007,7 @@ from a template that doesn't send back a revision header."
                         ;; insert PreFlow node, try one of various locations.
                         (let ((position-index
                                (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-                                        '(PostFlow PostClientFlow Flows DefaultFaultRule FaultRules)))
+                                      '(PostFlow PostClientFlow Flows DefaultFaultRule FaultRules)))
                               (new-preflow-elt
                                (car (apigee--parse-xml "<PreFlow><Request/><Response/></PreFlow>"))))
                           ;; insert before the selected element
@@ -1017,7 +1018,7 @@ from a template that doesn't send back a revision header."
                         ;; insert PostFlow node, try one of various locations.
                         (let ((position-index
                                (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-                                        '(PostClientFlow Flows PreFlow DefaultFaultRule FaultRules)))
+                                      '(PostClientFlow Flows PreFlow DefaultFaultRule FaultRules)))
                               (new-postflow-elt
                                (car (apigee--parse-xml "<PostFlow><Request/><Response/></PostFlow>"))))
                           ;; insert before the selected element
@@ -1056,7 +1057,7 @@ from a template that doesn't send back a revision header."
                         ;; insert DefaultFaultRule node. As above, try one of various locations.
                         (let ((position-index
                                (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-                                               '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
+                                      '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
                               (new-dfr-elt
                                (car (apigee--parse-xml "<DefaultFaultRule><AlwaysEnforce>true</AlwaysEnforce></DefaultFaultRule>"))))
                           ;; insert before the selected element
@@ -1075,12 +1076,12 @@ from a template that doesn't send back a revision header."
 (defun apigee--xml-locate-first-child-node (node child-name)
   (let ((n -1)
         (count))
-      (dolist (child (xml-node-children node))
-        (setq n (+ 1 n))
-        (if (and (listp child)
-                 (equal (xml-node-name child) child-name))
+    (dolist (child (xml-node-children node))
+      (setq n (+ 1 n))
+      (if (and (listp child)
+               (equal (xml-node-name child) child-name))
           (setq count n)))
-      count))
+    count))
 
 ;; (defun apigee--diag-parse ()
 ;;   (interactive)
@@ -1202,14 +1203,14 @@ proxy/sharedflow bundle"
 is visiting a policy file. otherwise nil."
   (let ((current-filename (buffer-file-name)))
     (if (apigee--is-policy-file current-filename)
-       (s-chop-suffix ".xml" (car (reverse (split-string current-filename
-                                                         "/")))))))
+        (s-chop-suffix ".xml" (car (reverse (split-string current-filename
+                                                          "/")))))))
 (defun apigee--list-policies ()
   "returns a list of policies in the current bundle"
   (if (apigee--root-path-of-bundle)
       (let* ((policy-dir
-             (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/"))
-            (fq-names (apigee--sort-strings (apigee--proper-files policy-dir ".xml"))))
+              (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/"))
+             (fq-names (apigee--sort-strings (apigee--proper-files policy-dir ".xml"))))
         (mapcar (lambda (s) (s-chop-suffix ".xml" (car (reverse (split-string s "/")))))
                 fq-names))))
 
@@ -1366,23 +1367,23 @@ is visiting a policy file. otherwise nil."
 
 (defun apigee--verify-exactly-one (file-list source-dir)
   "verifies that there is exactly one xml file."
-      (if (not file-list)
-          (error
-           (message "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
-      (if (not (= (length file-list) 1))
-          (error
-           (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
-      (nth 0 file-list))
+  (if (not file-list)
+      (error
+       (message "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
+  (if (not (= (length file-list) 1))
+      (error
+       (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
+  (nth 0 file-list))
 
 
 (defun apigee--copy-subdirs (subdirs source-dir dest-dir)
   (while subdirs
-        (let* ((this-dir (car subdirs))
-               (source-subdir (apigee--join-path-elements source-dir this-dir))
-               (dest-subdir (apigee--join-path-elements dest-dir this-dir)))
-          (if (apigee--is-existing-directory source-subdir)
-              (copy-directory source-subdir dest-subdir t nil)))
-        (setq subdirs (cdr subdirs))))
+    (let* ((this-dir (car subdirs))
+           (source-subdir (apigee--join-path-elements source-dir this-dir))
+           (dest-subdir (apigee--join-path-elements dest-dir this-dir)))
+      (if (apigee--is-existing-directory source-subdir)
+          (copy-directory source-subdir dest-subdir t nil)))
+    (setq subdirs (cdr subdirs))))
 
 (defun apigee--copy-proxy-template-files (proxy-name source destination)
   "copy files from the SOURCE template directory to the DESTINATION directory,
@@ -1461,8 +1462,8 @@ TEMPLATE-NAME - the name of the asset template, as stored in the templates/<asse
 CONTAINING-DIR - name of an existing directory into which to insert the new asset.
 "
   (if (not (apigee--is-existing-directory containing-dir))
-    (error
-     (message "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'")))
+      (error
+       (message "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'")))
   (let ((template-match (assoc template-name template-alist))
         (new-dir (apigee--join-path-elements containing-dir asset-name)))
     (if (apigee--is-existing-directory new-dir)
@@ -1509,9 +1510,9 @@ if necessary."
             "containing directory?: "
             (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
                     (delq nil (delete-dups candidate-list))) nil nil nil)))
-          (and (not (file-exists-p containing-dir))
-               (make-directory containing-dir t))
-          containing-dir)))
+      (and (not (file-exists-p containing-dir))
+           (make-directory containing-dir t))
+      containing-dir)))
 
 
 (defun apigee-new-proxy (arg)
@@ -1551,7 +1552,7 @@ directory. If no directory has ever been used, it prompts for the directory.
   (setq apigee--recently-used-asset-homes
         (-remove (lambda (x)  (equal (car x) containing-dir)) apigee--recently-used-asset-homes))
   (setq apigee--recently-used-asset-homes (cons (list containing-dir (decode-time nil t))
-                                              apigee--recently-used-asset-homes)))
+                                                apigee--recently-used-asset-homes)))
 
 (defun apigee--new-asset (asset-type prompt-arg)
   "Internal interactive fn that creates a new exploded asset directory

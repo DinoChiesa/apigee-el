@@ -17,6 +17,6 @@
     <Properties>
       <Property name='success.codes'>2xx</Property>
     </Properties>
-    <URL>https://dchiesa-first-project.appspot.com</URL>
+    <URL>https://modular.dchiesa.demo.altostrat.com/delay?mean=3000</URL>
   </HTTPTargetConnection>
 </ServiceCallout>
