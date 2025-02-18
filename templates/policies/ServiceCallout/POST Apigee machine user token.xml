@@ -1,0 +1,26 @@
+<ServiceCallout name='##'>
+  <Request>
+    <Set>
+      <Headers>
+        <Header name='content-type'>application/x-www-form-urlencoded</Header>
+      </Headers>
+      <FormParams>
+        <FormParam name='username'>{my-user-name}</FormParam>
+        <FormParam name='password'>{my-password-secret}</FormParam>
+        <FormParam name='grant_type'>password</FormParam>
+      </FormParams>
+      <Verb>POST</Verb>
+    </Set>
+  </Request>
+  <Response>tokenResponse</Response>
+  <HTTPTargetConnection>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <IgnoreValidationErrors>true</IgnoreValidationErrors>
+    </SSLInfo>
+    <Properties>
+      <Property name='success.codes'>2xx, 3xx</Property>
+    </Properties>
+    <URL>https://zoneName.login.apigee.com/oauth/token</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>
