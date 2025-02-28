@@ -4,5 +4,5 @@
     <Identifier ref='request.header.some-header-name'/>
     <!-- MessageWeight: optional -->
     <MessageWeight ref='request.header.weight'/>
-    <Rate>30ps</Rate>
+    <Rate ref='context-variable-here'>30ps</Rate>
 </SpikeArrest>

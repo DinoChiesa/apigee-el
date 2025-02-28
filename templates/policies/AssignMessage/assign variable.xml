@@ -70,6 +70,13 @@
 
   <AssignVariable>
     <Name>assigned</Name>
+    <Template>{
+  "systemMessage": "{escapeJSON(some-extracted-thing)}"
+}</Template>
+  </AssignVariable>
+
+  <AssignVariable>
+    <Name>assigned</Name>
     <Template>{randomLong(zero,plus_1000)}</Template>
   </AssignVariable>
 </AssignMessage>
