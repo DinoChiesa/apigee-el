@@ -1,17 +1,17 @@
 ;;; apigee.el --- utility functions for working with Apigee platform in emacs
 ;;
-;; Copyright (C) 2017-2023 Dino Chiesa and Google, LLC.
+;; Copyright (C) 2017-2025 Dino Chiesa and Google, LLC.
 ;;
 ;; Author     : Dino Chiesa
 ;; Maintainer : Dino Chiesa <dchiesa@google.com>
 ;; Created    : May 2017
-;; Modified   : December 2023
-;; Version    : 1.2
+;; Modified   : February 2025
+;; Version    : 1.3
 ;; Keywords   : apigee
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-February-18 22:04:09>
+;; Last-saved : <2025-February-28 20:10:59>
 ;;
 ;;; Commentary:
 ;;
@@ -44,7 +44,7 @@
 ;;
 ;;; License
 ;;
-;;    Copyright 2017-2023 Google LLC.
+;;    Copyright 2017-2025 Google LLC.
 ;;
 ;;    Licensed under the Apache License, Version 2.0 (the "License");
 ;;    you may not use this file except in compliance with the License.
@@ -67,6 +67,10 @@
 (require 'compile)
 (require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
+(require 'cl-lib) ; For assoc-if
+
+(defvar apigee-function-cache (make-hash-table :test 'equal)
+  "Cache for memoizing functions with timeouts.")
 
 (defvar apigee--base-template-dir nil
   "The directory from which policy templates have been most recently loaded")
@@ -78,22 +82,22 @@
   "whether this module should log verbosely into *Messages*. This is an on/off variable. Set it to a truthy value to get logging.")
 
 (defvar apigee--timer-minutes 6
-  "length of the interval in minutes between persisting apigee-emacs settings.")
+  "length of the interval in minutes between persisting apigee-el settings.")
 
 (defvar apigee-timer nil
   "cancellable timer, for saving apigee-emacs settings.")
 
 (defvar apigee--list-of-vars-to-store-and-restore
-  (list "apigee--verbose-logging" "apigee--recently-used-asset-homes" "apigee--base-template-dir" "apigee--timer-minutes")
+  (list "apigee--verbose-logging" "apigee--recently-used-asset-homes" "apigee--base-template-dir" "apigee--timer-minutes" "apigee-organization" "apigee-environment" "apigee-service-account")
   "a list of variables to store/restore in the settings file.")
 
-(defvar apigee--settings-file-base-name "apigee-edge.dat")
+(defvar apigee--settings-file-base-name "apigee-el.dat")
 
 (defvar apigee-commands-alist
   '(
     (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
-    (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
-    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
+    (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
+    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
     (lint .  "%apigeelint -s . -e TD002,TD007 -f visualstudio.js")
     ))
 
@@ -108,12 +112,18 @@
            \"~/.apigeecli/bin/apigeecli\")"
   )
 
+(defvar apigee--memoized-gcloud-pat
+  nil
+  "memoized version of print-access-token")
+
 (defvar apigee-placeholders-alist
   '(
-    (n . proxy-name)
+    (n . (apigee--proxy-name))
     (o . (apigee-get-organization want-prompt))
     (e . (apigee-get-environment want-prompt))
-    (t . (apigee-gcloud-auth-print-access-token))
+    (sa_args . (apigee-get-service-account-args-for-deployment want-prompt))
+    ;;(t . (apigee-gcloud-auth-print-access-token))
+    (t . (funcall apigee--memoized-gcloud-pat))
     )
   )
 
@@ -145,9 +155,11 @@
 
 
 (defvar apigee-organization nil
-  "The organization to use for deployments.")
+  "The organization to use for imports and deployments.")
 (defvar apigee-environment nil
   "The environment to use for deployments.")
+(defvar apigee-service-account nil
+  "The Service Account to use for deployments. The format must be {ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com.")
 
 (defvar apigee--load-file-name load-file-name
   "The name from which the Apigee module was loaded.")
@@ -282,7 +294,12 @@
       )))
 
 (defun apigee--persist-state ()
-  "function expected to be called periodically to store the state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
+  "function expected to be called periodically to store the state
+of the module. Things like the most recently used apiproxy home,
+the most recently used org and environment, or the most recently
+loaded templates directory. See the list of settings in
+`apigee--list-of-vars-to-store-and-restore'. "
+
   (setq apigee--recently-used-asset-homes (apigee--fresh-recent-asset-homes t))
   (let ((dat-file-path (apigee--path-to-settings-file))
         (alist-to-write nil))
@@ -494,30 +511,50 @@ Within each of those, there will be templates for those entities.
                 ", ")
                top-level-dir))))
 
+(defun apigee--read-or-default (prompt-label default-val)
+  (let ((response-val
+         (if (or (not default-val) (s-blank? default-val))
+             (read-string (format "%s: " prompt-label))
+           (read-string (format "%s (%s): " prompt-label default-val)
+                        default-val))))
+    (or response-val default-val)))
+
 (defun apigee-get-organization (&optional want-prompt)
+  "Returns the org to use for import and deployment. Uses a cached
+value, or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
-  (let
-      ((org-local
-        (if
-            (or want-prompt
-                (not apigee-organization))
-            (read-string "organization name: ")
-          apigee-organization)))
+  (let ((org-local
+         (if (or want-prompt (not apigee-organization))
+             (apigee--read-or-default "organization name"
+                                      apigee-organization)
+           apigee-organization)))
     (setq apigee-organization org-local)))
 
 (defun apigee-get-environment (&optional want-prompt)
+  "Returns the environment to use for deployment. Uses a cached value,
+or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
-  (let
-      ((env-local
-        (if
-            (or want-prompt
-                (not apigee-environment))
-            (read-string "environment name: ")
-          apigee-environment)))
+  (let ((env-local
+         (if (or want-prompt (not apigee-environment))
+             (apigee--read-or-default "environment name"
+                                      apigee-environment)
+           apigee-environment)))
     (setq apigee-environment env-local)))
 
-
-
+(defun apigee-get-service-account-args-for-deployment (&optional want-prompt)
+  "Returns the arguments to use on the apigeecli command line for the
+service account. Uses a cached value, or, if WANT-PROMPT, will
+prompt the user. Possibly nil, implying do not deploy with a
+service account."
+  (interactive "P")
+  (let ((sa-local
+         (if (or want-prompt (not apigee-service-account))
+             (apigee--read-or-default "service account"
+                                      apigee-service-account)
+           apigee-service-account)))
+    (setq apigee-service-account sa-local)
+    (if (not (s-blank? sa-local))
+        (format "--sa %s" sa-local))))
 
 ;; (if
 ;;     (apigee--prompt-for-containing-dir)
@@ -758,8 +795,6 @@ of available policies.
   (x-popup-menu (apigee--get-menu-position)
                 (apigee--generate-policy-menu))
 
-
-
   ;; popup-cascade-menu works, sort of.  The cascading is sort of messy.  That's
   ;; just an effect of how the length of the prefix is constructed in
   ;; popup-create. I couldn't figure it out in popup.el.
@@ -772,7 +807,7 @@ of available policies.
 
   ;; Omitting the height param... allows a better view of the toplevel menu,
   ;; which is nice. But selecting from that level results in an error, "args out
-  ;; of range" in fn `poup-line-overlay'.  I was not able to diagnose that.
+  ;; of range" in fn `popup-line-overlay'.  I was not able to diagnose that.
   ;; So I keep the height and ... suffer with poor UI?
 
   ;; (popup-cascade-menu (apigee--convert-policy-alist-to-popup-menu-spec)
@@ -868,6 +903,28 @@ Uses a counter that is indexed per policy type within each API Proxy.
          (lines (split-string output "\n")))
     (car (last lines))))
 
+(defun apigee--memoize-with-timeout (fn &optional timeout-in-seconds)
+  "Memoize a function with a timeout.
+
+  FUNCTION is the function to memoize.
+  TIMEOUT-IN-SECONDS is the cache expiration time in seconds (default: 600 seconds - 10 minutes).
+
+  Returns a memoized function."
+  (lexical-let ((timeout (or timeout-in-seconds (* 10 60)))  ; Default to 10 minutes
+                (lexically-bound-fn fn))
+    (lambda (&rest args)
+      (let* ((key (cons lexically-bound-fn args))
+             (entry (gethash key apigee-function-cache))
+             (now (current-time)))
+        (if (and entry
+                 (<= (float-time (time-subtract now (cdr entry))) timeout))
+            (car entry) ; Return cached value
+          (let ((result (apply lexically-bound-fn args)))
+            (puthash key (cons result now) apigee-function-cache) ; Update cache
+            result))))))
+
+(setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
+
 (defun apigee--proxy-name ()
   "returns the short name for an API proxy"
   (let ((bundle-dir (apigee--root-path-of-bundle))
@@ -878,37 +935,42 @@ Uses a counter that is indexed per policy type within each API Proxy.
                (proxy-defn-file (apigee--verify-exactly-one file-list bundle-apiproxy-dir)))
           (apigee--trim-xml-suffix (file-name-nondirectory proxy-defn-file))))))
 
+(defun apigee--replace-placeholder (acc item)
+  "used in seq-reduce. I defined this in a formal fn rather
+than a lambda to avoid edebug issues."
+  (let* ((key (car item))
+         (replaceable (concat "%" (symbol-name key)))
+         (val (cdr item)))
+    (if (s-contains? replaceable acc)
+        (let ((replacement (eval val t)))
+          (if replacement
+              (replace-regexp-in-string replaceable replacement acc)
+            acc))
+      acc)))
+
+(defun apigee--replace-program (acc item)
+  (let* ((key (car item))
+         (replaceable (concat "%" (symbol-name key))))
+    (if (s-contains? replaceable acc)
+        (replace-regexp-in-string replaceable (cdr item) acc)
+      acc)))
+
 (defun apigee--get-command (symbol want-prompt)
   "get the apigeelint command for the current API proxy."
   (let ((cmd (alist-get symbol apigee-commands-alist)))
     (when cmd
+      ;; need two different let scopes for the eval to resolve vars
       (let ((bundle-dir (apigee--root-path-of-bundle))
-            (bundle-type (apigee--type-of-bundle))
-            (proxy-name (apigee--proxy-name))
-            (fn1 (lambda (acc cur)
-                   (let* ((key (car cur))
-                          (replaceable (concat "%" (symbol-name key))))
-                     (if (s-contains? replaceable acc)
-                         (replace-regexp-in-string replaceable (cdr cur) acc)
-                       acc))))
-            (fn2 (lambda (acc cur)
-                   (let* ((key (car cur))
-                          (replaceable (concat "%" (symbol-name key)))
-                          (val (cdr cur)))
-                     (if (s-contains? replaceable acc)
-                         (replace-regexp-in-string replaceable (eval val t) acc)
-                       acc)))))
-
+            (bundle-type (apigee--type-of-bundle)))
         (setq cmd
               (seq-reduce
-               fn1
+               #'apigee--replace-program
                apigee-programs-alist
                cmd))
-
         ;; I had trouble using this seq-reduce, when using edebug-defun.
         ;; But in my experience, when NOT using the debugger, it works as intended.
         ;; Womp womp.
-        (seq-reduce fn2 apigee-placeholders-alist cmd)))))
+        (seq-reduce #'apigee--replace-placeholder apigee-placeholders-alist cmd)))))
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy."
