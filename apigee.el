@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-February-28 20:10:59>
+;; Last-saved : <2025-March-01 04:43:16>
 ;;
 ;;; Commentary:
 ;;
@@ -103,13 +103,16 @@
 
 (defvar apigee-programs-alist
   '(
-    (gcloud . "~/path/to/gcloud")
-    (apigeecli . "~/path/to/apigeecli")
+    (gcloud . "gcloud")
+    (apigeecli . "apigeecli")
     (apigeelint . "node ~/path/to/apigeelint/cli.js")
     )
-  "users should set these in their emacs init file, via, for example,
-  (setf (alist-get 'apigeecli apigee-programs-alist)
-           \"~/.apigeecli/bin/apigeecli\")"
+  "apigee.el will use `executable-find' to locate the programs on the path. If
+you want to avoid that, you can set the path explicitly in your emacs init file,
+via, for example,
+  (setf (alist-get 'apigeecli apigee-programs-alist) \"~/.apigeecli/bin/apigeecli\"
+        (alist-get 'gcloud apigee-programs-alist) \"~/gcloud-sdk/bin/gcloud\"
+    )"
   )
 
 (defvar apigee--memoized-gcloud-pat
@@ -544,40 +547,27 @@ or, if WANT-PROMPT, will prompt the user."
 (defun apigee-get-service-account-args-for-deployment (&optional want-prompt)
   "Returns the arguments to use on the apigeecli command line for the
 service account. Uses a cached value, or, if WANT-PROMPT, will
-prompt the user. Possibly nil, implying do not deploy with a
-service account."
+prompt the user. The format of the service account must be
+{ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com . If the format is just
+the short version, this fn will append the PROJECT and suffix.
+
+Returns the string representing the full email of the service
+account, or nil, the latter implying do not deploy with a service
+account."
   (interactive "P")
   (let ((sa-local
          (if (or want-prompt (not apigee-service-account))
              (apigee--read-or-default "service account"
                                       apigee-service-account)
            apigee-service-account)))
-    (setq apigee-service-account sa-local)
+    (when (equal sa-local "-") ;; this means use no SA
+      (setq sa-local nil))
+    (when (and (not (s-blank? sa-local)) (not (s-contains? "@" sa-local)))
+      ;; user provided short form; append the boilerplate suffix.
+      (setq sa-local (format "%s@%s.iam.gserviceaccount.com" sa-local (apigee-get-organization) )))
+    (setq apigee-service-account sa-local) ;; for next time, and for persistence
     (if (not (s-blank? sa-local))
         (format "--sa %s" sa-local))))
-
-;; (if
-;;     (apigee--prompt-for-containing-dir)
-;;            (or (car (apigee--fresh-recent-asset-homes nil)) (apigee--prompt-for-containing-dir)))))
-;;
-;;  (let* ((org-local
-;;          (or apigee-organization
-;;              (read-string "organization name: ")))
-;;         (env-local
-;;          (or apigee-environment
-;;              (read-string "environment name: ")))
-;;         )
-;;    (list org-local env-local)))
-;;
-;;    (if (and org env)
-;;        (progn
-;;          (setq apigee-organization org
-;;                apigee-environment env)
-;;          )
-;;      )
-;;    )
-
-
 
 (defun apigee--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
@@ -630,6 +620,8 @@ If the apiproxy is defined in a structure like this:
 then the return value is: ~/foo/bar/APINAME/
 
 It always ends in slash.
+
+If not in a bundle, then it returns....nil
 
 "
   (let ((path
@@ -898,10 +890,13 @@ Uses a counter that is indexed per policy type within each API Proxy.
   "return output of $(gcloud auth print-access-token)"
   (let* ((gcloud-pgm
           (alist-get 'gcloud apigee-programs-alist))
-         (command-string (concat gcloud-pgm " auth print-access-token"))
-         (output (replace-regexp-in-string "\n$" "" (shell-command-to-string command-string)))
-         (lines (split-string output "\n")))
-    (car (last lines))))
+         (resolved-pgm (apigee--resolve-program gcloud-pgm)))
+    (if (not resolved-pgm)
+        (error (format "cannot resolve %s" gcloud-pgm)))
+    (let* ((command-string (concat resolved-pgm " auth print-access-token"))
+           (output (replace-regexp-in-string "\n$" "" (shell-command-to-string command-string)))
+           (lines (split-string output "\n")))
+      (car (last lines)))))
 
 (defun apigee--memoize-with-timeout (fn &optional timeout-in-seconds)
   "Memoize a function with a timeout.
@@ -948,38 +943,74 @@ than a lambda to avoid edebug issues."
             acc))
       acc)))
 
+(defun apigee--resolve-program (pgm)
+  (if (s-contains? " " pgm) pgm (executable-find pgm)))
+
 (defun apigee--replace-program (acc item)
   (let* ((key (car item))
          (replaceable (concat "%" (symbol-name key))))
     (if (s-contains? replaceable acc)
-        (replace-regexp-in-string replaceable (cdr item) acc)
+        (let ((resolved-pgm (apigee--resolve-program (cdr item))))
+          (if (not resolved-pgm)
+              (error (format "cannot resolve %s" gcloud-pgm)))
+          (replace-regexp-in-string replaceable resolved-pgm acc))
       acc)))
+
+;; ;; need two different let scopes for the eval to resolve vars
+;; (let ((bundle-dir (apigee--root-path-of-bundle))
+;;       (bundle-type (apigee--type-of-bundle)))
 
 (defun apigee--get-command (symbol want-prompt)
   "get the apigeelint command for the current API proxy."
   (let ((cmd (alist-get symbol apigee-commands-alist)))
     (when cmd
-      ;; need two different let scopes for the eval to resolve vars
-      (let ((bundle-dir (apigee--root-path-of-bundle))
-            (bundle-type (apigee--type-of-bundle)))
-        (setq cmd
-              (seq-reduce
-               #'apigee--replace-program
-               apigee-programs-alist
-               cmd))
-        ;; I had trouble using this seq-reduce, when using edebug-defun.
-        ;; But in my experience, when NOT using the debugger, it works as intended.
-        ;; Womp womp.
-        (seq-reduce #'apigee--replace-placeholder apigee-placeholders-alist cmd)))))
+      (setq cmd
+            (seq-reduce #'apigee--replace-program apigee-programs-alist cmd))
+      ;; I had trouble using this seq-reduce, when using edebug-defun.
+      ;; But in my experience, when NOT using the debugger, it works as intended.
+      ;; Womp womp.
+      (seq-reduce #'apigee--replace-placeholder apigee-placeholders-alist cmd))))
+
+;; (defun apigee--mask-secrets ()
+;;   "Intended for use in `compilation-filter-hook'"
+;;   (save-excursion
+;;     (let ((inhibit-read-only t))
+;;       (goto-char (point-min))
+;;       (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+;;         (replace-match "--token ***masked***")))))
+;;
+;; (defun apigee--remove-compilation-filter-hook ()
+;;   (remove-hook 'compilation-filter-hook 'apigee--mask-secrets))
+;;
+;; (add-hook 'compilation-filter-hook 'apigee--mask-secrets)
+
+(defun apigee--has-same-bundle-root (root-dir-in-question)
+  "predicate called in each unsaved buffer.  Returns t if the buffer
+is part of an apiproxy, and if the ROOT-DIR-IN-QUESTION is the same
+as the root of the current buffer.
+Used as a predicate for `save-some-buffers'."
+  (let ((bundle-dir (apigee--root-path-of-bundle)))
+    (and bundle-dir
+         (not (s-blank? bundle-dir))
+         (equal bundle-dir root-dir-in-question))))
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy."
   (let ((bundle-dir (apigee--root-path-of-bundle))
         (proxy-name (apigee--proxy-name))
         (cmd (apigee--get-command command-symbol want-prompt)))
-    (let ((name-function (lambda (mode) (concat "*" label " - " proxy-name "*")))
+    (let ((name-function (lambda (_mode) (concat "*" label " - " proxy-name "*")))
           highlight-regexp)
       (when cmd
+        (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
+        ;; 20250301-0426
+        ;;
+        ;; If I use nil here for mode, I cannot mask the token, and the output
+        ;; is not displayed very quickly. If I use t, then the code can mask
+        ;; the token, and the output gets displayed much more quickly. The
+        ;; experience is better.  The one downside: the compilation is shown in
+        ;; comint mode, which I theoretically don't want - it's not
+        ;; interactive. But I don't care that much.
         (let ((buf
                (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)))
           (with-current-buffer buf
@@ -989,6 +1020,24 @@ than a lambda to avoid edebug issues."
               (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
                 (replace-match "--token ***masked***")))
             (setq buffer-read-only t)))))))
+
+
+;; (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)
+;; ;;(run-with-timer 6 nil #'apigee--remove-compilation-filter-hook )
+;; ))))
+
+;; ;; if I use nil here for mode, I cannot mask the token
+;; ;; if I yuse t, then the code can mask the token.
+;; ;; is it a race condition?
+;; (let ((buf
+;;        (compilation-start (concat "cd " bundle-dir "; " cmd) nil name-function highlight-regexp)))
+;;   (with-current-buffer buf
+;;     ;; obscure any token that appears
+;;     (save-excursion
+;;       (beginning-of-buffer)
+;;       (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+;;         (replace-match "--token ***masked***")))
+;;     (setq buffer-read-only t)))))))
 
 (defun apigee-lint-asset ()
   "Run apigeelint on the API proxy."
