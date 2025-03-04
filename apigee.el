@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2024-August-14 09:47:24>
+;; Last-saved : <2025-January-06 04:42:22>
 ;;
 ;;; Commentary:
 ;;
@@ -93,8 +93,13 @@
    (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
    (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e --token %t")
-   (lint .  "%apigeelint -s . -e TD002,TD007 -f visualstudio.js")
+   (lint .  "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
    ))
+
+;; to modify after program starts:
+;; (setf (alist-get 'lint apigee-commands-alist)
+;;      "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
+
 
 (defvar apigee-programs-alist
   '(
@@ -113,8 +118,11 @@
     (o . (apigee-get-organization want-prompt))
     (e . (apigee-get-environment want-prompt))
     (t . (apigee-gcloud-auth-print-access-token))
+    (lint-exclusions . (apigee-get-lint-exclusions))
     )
   )
+
+;;(add-to-list 'apigee-placeholders-alist '(lint-exclusions . (apigee-get-lint-exclusions)))
 
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
@@ -143,10 +151,10 @@
 ;;     2 3 nil 2 1 ))
 
 
-(defvar apigee-organization "your-organization-here"
-  "The organization to use for deployments.")
-(defvar apigee-environment "your-environment-here"
-  "The environment to use for deployments.")
+(defvar apigee-organization nil
+  "The organization to use for deployments. apigee.el will prompt if unset.")
+(defvar apigee-environment nil
+  "The environment to use for deployments. apigee.el will prompt if unset.")
 
 (defvar apigee--load-file-name load-file-name
   "The name from which the Apigee module was loaded.")
@@ -247,6 +255,9 @@
 ")))
 
 
+(defvar apigee-lint-exclusions "TD002,TD007,TD012"
+        "The comma-separated list of plugins to exclude from apigeelint")
+
 (defvar apigee--policy-template-alist nil
   "An alist. For each element, the cons is a policy type name, eg \"AccessEntity\", and the cadr is a list of strings, each of which is a filename referring to a template for the policy. The actual filename will be in (apigee--join-path-elements apigee--base-template-dir \"policies\" policy-type filename)")
 
@@ -258,6 +269,12 @@
 
 (defvar apigee--sharedflow-template-alist nil
   "An alist, relating a name to a template for a sharedflow. The cadr of each entry is a string, a directory name, containing the exploded sharedflow template.")
+
+
+(defun apigee-get-lint-exclusions()
+  "get a string representing a comma-separated set of plugins to exclude from apigeelint"
+  apigee-lint-exclusions
+  )
 
 (defun apigee--path-to-settings-file ()
   "a function rturning the path to the settings file for apigee.el"
@@ -904,28 +921,70 @@ Uses a counter that is indexed per policy type within each API Proxy.
                apigee-programs-alist
                cmd))
 
+        ;; (if (and
+        ;;      (s-contains? "%lint-exclusions" cmd)
+        ;;      apigee-lint-exclusions)
+        ;;     (setq cmd (replace-regexp-in-string "%lint-exclusions"  apigee-lint-exclusions cmd)))
+
         ;; I had trouble using this seq-reduce, when using edebug-defun.
         ;; But in my experience, when NOT using the debugger, it works as intended.
         ;; Womp womp.
+        ;; Maybe it's different because of the use of eval in the fn2.
         (seq-reduce fn2 apigee-placeholders-alist cmd)))))
+
+(defun dc-find-item-in-list-of-lists (list-of-lists target-string)
+  "Find the first item in LIST-OF-LISTS whose car matches TARGET-STRING.
+Returns nil if no such item is found."
+  (catch 'found
+    (dolist (item list-of-lists)
+      (when (string= (car item) target-string)
+        (throw 'found item)))))
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy."
   (let ((bundle-dir (apigee--root-path-of-bundle))
         (proxy-name (apigee--proxy-name))
         (cmd (apigee--get-command command-symbol want-prompt)))
-    (let ((name-function (lambda (mode) (concat "*" label " - " proxy-name "*")))
-          highlight-regexp)
-      (when cmd
-        (let ((buf
-               (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)))
-          (with-current-buffer buf
-            ;; obscure any token that appears
-            (save-excursion
-              (beginning-of-buffer)
-              (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-                (replace-match "--token ***masked***")))
-            (setq buffer-read-only t)))))))
+    (when cmd
+      (save-some-buffers nil)
+      (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " proxy-name "*")))
+            (remote-host
+             (save-match-data ; is usually a good idea
+               (and
+                (string-match "^/ssh:\\([^:]+\\):" bundle-dir)
+                (match-string 1 bundle-dir))))
+            highlight-regexp)
+        ;; Chapter 1. trying to get compilation-start over Tramp to use bash
+        (when remote-host
+          (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
+                 (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
+                 (item
+                  (dc-find-item-in-list-of-lists tramp-connection-properties safe-ssh-spec-pattern)))
+            (if (not item)
+                (add-to-list 'tramp-connection-properties
+                             (list safe-ssh-spec-pattern
+                                   "remote-shell" "/bin/bash")))))
+
+        (let ((default-directory (expand-file-name bundle-dir))
+              ;;(process-environment '("PATH=foobar"))
+              )
+          (with-connection-local-variables
+           (let (
+                 ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
+                 ;; Not sure which, if any, are required here.
+                 (compilation-shell-name  "/bin/bash")
+                 (tramp-default-remote-shell "/bin/bash")
+                 (tramp-encoding-shell "/bin/bash")
+                 (buf
+                  (compilation-start cmd t name-function highlight-regexp)))
+             (with-current-buffer buf
+               ;; obscure any token that appears
+               (save-excursion
+                 (beginning-of-buffer)
+                 (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+                   (replace-match "--token ***masked***")))
+               (setq buffer-read-only t)))))))))
+
 
 (defun apigee-lint-asset ()
   "Run apigeelint on the API proxy."
