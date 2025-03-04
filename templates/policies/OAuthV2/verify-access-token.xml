@@ -1,7 +1,7 @@
 <OAuthV2 name='##'>
-    <DisplayName>##</DisplayName>
-    <Operation>VerifyAccessToken</Operation>
-    <CacheExpiryInSeconds>40</CacheExpiryInSeconds>
+  <DisplayName>##</DisplayName>
+  <Operation>VerifyAccessToken</Operation>
+  <CacheExpiryInSeconds ref="propertyset.settings.token-ttl">40</CacheExpiryInSeconds>
 
     <!-- By default, this policy pulls the token from the Authorization header
          as per the OAuthV2.0 specs.
