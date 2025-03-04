@@ -11,7 +11,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-March-01 04:43:16>
+;; Last-saved : <2025-March-04 02:03:08>
 ;;
 ;;; Commentary:
 ;;
@@ -98,8 +98,12 @@
     (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
     (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
     (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
-    (lint .  "%apigeelint -s . -e TD002,TD007 -f visualstudio.js")
+    (lint .  "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
     ))
+
+;; to modify after program starts:
+;; (setf (alist-get 'lint apigee-commands-alist)
+;;      "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
 
 (defvar apigee-programs-alist
   '(
@@ -127,8 +131,11 @@ via, for example,
     (sa_args . (apigee-get-service-account-args-for-deployment want-prompt))
     ;;(t . (apigee-gcloud-auth-print-access-token))
     (t . (funcall apigee--memoized-gcloud-pat))
+    (lint-exclusions . (apigee-get-lint-exclusions))
     )
   )
+
+;;(add-to-list 'apigee-placeholders-alist '(lint-exclusions . (apigee-get-lint-exclusions)))
 
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
@@ -158,9 +165,9 @@ via, for example,
 
 
 (defvar apigee-organization nil
-  "The organization to use for imports and deployments.")
+  "The organization to use for deployments. apigee.el will prompt if unset.")
 (defvar apigee-environment nil
-  "The environment to use for deployments.")
+  "The environment to use for deployments. apigee.el will prompt if unset.")
 (defvar apigee-service-account nil
   "The Service Account to use for deployments. The format must be {ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com.")
 
@@ -263,6 +270,9 @@ via, for example,
 ")))
 
 
+(defvar apigee-lint-exclusions "TD002,TD007,TD012"
+  "The comma-separated list of plugins to exclude from apigeelint")
+
 (defvar apigee--policy-template-alist nil
   "An alist. For each element, the cons is a policy type name, eg \"AccessEntity\", and the cadr is a list of strings, each of which is a filename referring to a template for the policy. The actual filename will be in (apigee--join-path-elements apigee--base-template-dir \"policies\" policy-type filename)")
 
@@ -274,6 +284,12 @@ via, for example,
 
 (defvar apigee--sharedflow-template-alist nil
   "An alist, relating a name to a template for a sharedflow. The cadr of each entry is a string, a directory name, containing the exploded sharedflow template.")
+
+
+(defun apigee-get-lint-exclusions()
+  "get a string representing a comma-separated set of plugins to exclude from apigeelint"
+  apigee-lint-exclusions
+  )
 
 (defun apigee--path-to-settings-file ()
   "a function rturning the path to the settings file for apigee.el"
@@ -994,32 +1010,65 @@ Used as a predicate for `save-some-buffers'."
          (not (s-blank? bundle-dir))
          (equal bundle-dir root-dir-in-question))))
 
+(defun dc-find-item-in-list-of-lists (list-of-lists target-string)
+  "Find the first item in LIST-OF-LISTS whose car matches TARGET-STRING.
+Returns nil if no such item is found."
+  (catch 'found
+    (dolist (item list-of-lists)
+      (when (string= (car item) target-string)
+        (throw 'found item)))))
+
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy."
   (let ((bundle-dir (apigee--root-path-of-bundle))
         (proxy-name (apigee--proxy-name))
         (cmd (apigee--get-command command-symbol want-prompt)))
-    (let ((name-function (lambda (_mode) (concat "*" label " - " proxy-name "*")))
+    (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " proxy-name "*")))
+          (remote-host
+           (save-match-data ; is usually a good idea
+           (and
+            (string-match "^/ssh:\\([^:]+\\):" bundle-dir)
+            (match-string 1 bundle-dir))))
           highlight-regexp)
       (when cmd
         (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
-        ;; 20250301-0426
-        ;;
-        ;; If I use nil here for mode, I cannot mask the token, and the output
-        ;; is not displayed very quickly. If I use t, then the code can mask
-        ;; the token, and the output gets displayed much more quickly. The
-        ;; experience is better.  The one downside: the compilation is shown in
-        ;; comint mode, which I theoretically don't want - it's not
-        ;; interactive. But I don't care that much.
-        (let ((buf
-               (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)))
-          (with-current-buffer buf
-            ;; obscure any token that appears
-            (save-excursion
-              (beginning-of-buffer)
-              (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-                (replace-match "--token ***masked***")))
-            (setq buffer-read-only t)))))))
+        (let ((default-directory (expand-file-name bundle-dir))
+              ;;(process-environment '("PATH=foobar"))
+              )
+          ;; Chapter 1. trying to get compilation-start over Tramp to use bash
+          (when remote-host
+            (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
+                   (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
+                   (item
+                    (dc-find-item-in-list-of-lists tramp-connection-properties safe-ssh-spec-pattern)))
+              (if (not item)
+                  (add-to-list 'tramp-connection-properties
+                               (list safe-ssh-spec-pattern
+                               "remote-shell" "/bin/bash")))))
+          ;; 20250301-0426
+          ;;
+          ;; If I use nil here for mode, I cannot mask the token, and the output
+          ;; is not displayed very quickly. If I use t, then the code can mask
+          ;; the token, and the output gets displayed much more quickly. The
+          ;; experience is better.  The one downside: the compilation is shown in
+          ;; comint mode, which I theoretically don't want - it's not
+          ;; interactive. But I don't care that much.
+          (with-connection-local-variables
+           (let (
+                 ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
+                 ;; Not sure which, if any, are required here.
+                 (compilation-shell-name  "/bin/bash")
+                 (tramp-default-remote-shell "/bin/bash")
+                 (tramp-encoding-shell "/bin/bash"))
+             (let ((buf
+                (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)))
+           (with-current-buffer buf
+             ;; obscure any token that appears
+             (save-excursion
+               (beginning-of-buffer)
+               (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+                 (replace-match "--token ***masked***")))
+             (setq buffer-read-only t))))))))))
 
 
 ;; (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)
