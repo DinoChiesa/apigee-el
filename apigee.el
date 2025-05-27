@@ -1,3 +1,5 @@
+;;; -*- coding: utf-8; lexical-binding: t;  -*-
+
 ;;; apigee.el --- utility functions for working with Apigee platform in emacs
 ;;
 ;; Copyright (C) 2017-2025 Dino Chiesa and Google, LLC.
@@ -11,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-March-01 04:43:16>
+;; Last-saved : <2025-May-27 15:28:53>
 ;;
 ;;; Commentary:
 ;;
@@ -120,19 +122,17 @@ via, for example,
   "memoized version of print-access-token")
 
 (defvar apigee-placeholders-alist
-  '(
-    (n . (apigee--proxy-name))
-    (o . (apigee-get-organization want-prompt))
-    (e . (apigee-get-environment want-prompt))
-    (sa_args . (apigee-get-service-account-args-for-deployment want-prompt))
-    ;;(t . (apigee-gcloud-auth-print-access-token))
-    (t . (funcall apigee--memoized-gcloud-pat))
+  `(
+    (n .       apigee--proxy-name)
+    (o .       apigee-get-organization)
+    (e .       apigee-get-environment )
+    (sa_args . apigee-get-service-account-args-for-deployment )
+    (t .       apigee--memoized-gcloud-pat)
     )
   )
 
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
-
 (add-to-list 'compilation-error-regexp-alist-alist
              '(apigeelint-visualstudio-error-with-lines
                "^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
@@ -144,7 +144,6 @@ via, for example,
 ;;    '("^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
 ;;     2 3 4 2 1 ))
 
-
 (add-to-list 'compilation-error-regexp-alist-alist
              '(apigeelint-visualstudio-error-no-line
                "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
@@ -155,7 +154,6 @@ via, for example,
 ;;  (alist-get 'apigeelint-visualstudio-error-no-line compilation-error-regexp-alist-alist)
 ;;    '( "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
 ;;     2 3 nil 2 1 ))
-
 
 (defvar apigee-organization nil
   "The organization to use for imports and deployments.")
@@ -567,7 +565,8 @@ account."
       (setq sa-local (format "%s@%s.iam.gserviceaccount.com" sa-local (apigee-get-organization) )))
     (setq apigee-service-account sa-local) ;; for next time, and for persistence
     (if (not (s-blank? sa-local))
-        (format "--sa %s" sa-local))))
+        (format "--sa %s" sa-local)
+      "")))
 
 (defun apigee--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
@@ -656,7 +655,7 @@ choose a target type to insert.
   (interactive)
   (let ((apiproxy-dir (apigee--root-path-of-bundle))
         (template-name
-         (ido-completing-read
+         (ido-completing-read ;; TODO: why is this ido?  And not just completing-read?
           (format "target template: ")
           (mapcar (lambda (x) (car x)) apigee--target-template-alist)
           nil nil nil)))
@@ -886,8 +885,10 @@ Uses a counter that is indexed per policy type within each API Proxy.
                 pname (funcall next-name val)))
         pname))))
 
-(defun apigee-gcloud-auth-print-access-token ()
-  "return output of $(gcloud auth print-access-token)"
+(defun apigee-gcloud-auth-print-access-token (&rest ignored)
+  "return output of $(gcloud auth print-access-token) .
+It accepts an arg because the logic in `apigee--replace-placeholder'
+expects it."
   (let* ((gcloud-pgm
           (alist-get 'gcloud apigee-programs-alist))
          (resolved-pgm (apigee--resolve-program gcloud-pgm)))
@@ -905,8 +906,8 @@ Uses a counter that is indexed per policy type within each API Proxy.
   TIMEOUT-IN-SECONDS is the cache expiration time in seconds (default: 600 seconds - 10 minutes).
 
   Returns a memoized function."
-  (lexical-let ((timeout (or timeout-in-seconds (* 10 60)))  ; Default to 10 minutes
-                (lexically-bound-fn fn))
+  (let ((timeout (or timeout-in-seconds (* 10 60)))  ; Default to 10 minutes
+        (lexically-bound-fn fn))
     (lambda (&rest args)
       (let* ((key (cons lexically-bound-fn args))
              (entry (gethash key apigee-function-cache))
@@ -920,8 +921,9 @@ Uses a counter that is indexed per policy type within each API Proxy.
 
 (setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
 
-(defun apigee--proxy-name ()
-  "returns the short name for an API proxy"
+(defun apigee--proxy-name (&rest ignored)
+  "Returns the short name for an API proxy. It accepts an argument
+because the logic in `apigee--replace-placeholder' expects it."
   (let ((bundle-dir (apigee--root-path-of-bundle))
         (bundle-type (apigee--type-of-bundle)))
     (if (s-equals? bundle-type "apiproxy")
@@ -930,18 +932,25 @@ Uses a counter that is indexed per policy type within each API Proxy.
                (proxy-defn-file (apigee--verify-exactly-one file-list bundle-apiproxy-dir)))
           (apigee--trim-xml-suffix (file-name-nondirectory proxy-defn-file))))))
 
-(defun apigee--replace-placeholder (acc item)
+(defun apigee--replace-placeholder (want-prompt)
   "used in seq-reduce. I defined this in a formal fn rather
 than a lambda to avoid edebug issues."
-  (let* ((key (car item))
-         (replaceable (concat "%" (symbol-name key)))
-         (val (cdr item)))
-    (if (s-contains? replaceable acc)
-        (let ((replacement (eval val t)))
-          (if replacement
-              (replace-regexp-in-string replaceable replacement acc)
-            acc))
-      acc)))
+  (let ((want-prompt want-prompt))
+    (lambda (acc item)
+      (let* ((key (car item))
+             (replaceable (concat "%" (symbol-name key))))
+        (if (s-contains? replaceable acc)
+            (if-let*
+                ((replacer-fn (cdr item))
+                 (callable-fn ;; the cdr is either a defun or a variable
+                  (cond ((fboundp replacer-fn) replacer-fn)
+                        ((and (boundp replacer-fn) (functionp (symbol-value replacer-fn)))
+                         (symbol-value replacer-fn))
+                        (t nil)))
+                 (replacement (funcall callable-fn want-prompt)))
+                (replace-regexp-in-string replaceable replacement acc)
+              acc)
+          acc)))))
 
 (defun apigee--resolve-program (pgm)
   (if (s-contains? " " pgm) pgm (executable-find pgm)))
@@ -956,10 +965,6 @@ than a lambda to avoid edebug issues."
           (replace-regexp-in-string replaceable resolved-pgm acc))
       acc)))
 
-;; ;; need two different let scopes for the eval to resolve vars
-;; (let ((bundle-dir (apigee--root-path-of-bundle))
-;;       (bundle-type (apigee--type-of-bundle)))
-
 (defun apigee--get-command (symbol want-prompt)
   "get the apigeelint command for the current API proxy."
   (let ((cmd (alist-get symbol apigee-commands-alist)))
@@ -969,20 +974,21 @@ than a lambda to avoid edebug issues."
       ;; I had trouble using this seq-reduce, when using edebug-defun.
       ;; But in my experience, when NOT using the debugger, it works as intended.
       ;; Womp womp.
-      (seq-reduce #'apigee--replace-placeholder apigee-placeholders-alist cmd))))
+      (let ((replacer (apigee--replace-placeholder want-prompt)))
+        (seq-reduce replacer apigee-placeholders-alist cmd)))))
 
-;; (defun apigee--mask-secrets ()
-;;   "Intended for use in `compilation-filter-hook'"
-;;   (save-excursion
-;;     (let ((inhibit-read-only t))
-;;       (goto-char (point-min))
-;;       (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-;;         (replace-match "--token ***masked***")))))
-;;
-;; (defun apigee--remove-compilation-filter-hook ()
-;;   (remove-hook 'compilation-filter-hook 'apigee--mask-secrets))
-;;
-;; (add-hook 'compilation-filter-hook 'apigee--mask-secrets)
+(defun apigee--mask-secrets ()
+  "Intended for use in `compilation-filter-hook'"
+  (save-excursion
+    (let ((inhibit-read-only t))
+      (goto-char (point-min))
+      (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+        (replace-match "--token ***masked***")))))
+
+(defun apigee--remove-compilation-filter-hook ()
+  (remove-hook 'compilation-filter-hook 'apigee--mask-secrets))
+
+(add-hook 'compilation-filter-hook 'apigee--mask-secrets)
 
 (defun apigee--has-same-bundle-root (root-dir-in-question)
   "predicate called in each unsaved buffer.  Returns t if the buffer
