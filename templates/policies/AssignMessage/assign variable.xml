@@ -32,6 +32,16 @@
     <!-- eg, 20210604T123600Z -->
   </AssignVariable>
 
+
+  <AssignVariable>
+    <Name>default-dynamic-rate</Name>
+    <Value>10ps</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>assigned-rate</Name>
+    <Template>{firstnonnull(request.header.requested-rate,default-dynamic-rate)}</Template>
+  </AssignVariable>
+
   <AssignVariable>
     <Name>assigned</Name>
     <Template>{xeger('[0-9]{12}')}</Template>

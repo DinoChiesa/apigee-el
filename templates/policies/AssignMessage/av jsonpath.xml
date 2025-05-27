@@ -18,4 +18,19 @@
     <Template>{jsonPath(json_path_1,json_value_1)}</Template>
   </AssignVariable>
 
+  <AssignVariable>
+    <Name>desired-key</Name>
+    <Value>Key2</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>jsonpath-expression</Name>
+    <Template>{{jsonPath($.productType[*].extensions[?(@.key == '{desired-key}')].value,request.content,false)}}</Template>
+  </AssignVariable>
+
+  <AssignVariable>
+    <Name>resolved-value</Name>
+    <Template ref='jsonpath-expression'/>
+  </AssignVariable>
+
+
 </AssignMessage>
