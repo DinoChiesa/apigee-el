@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-May-27 15:34:45>
+;; Last-saved : <2025-May-27 16:45:45>
 ;;
 ;;; Commentary:
 ;;
@@ -29,8 +29,13 @@
 ;;
 ;; To use this module, assuming ~/elisp/apigee contains apigee.el,
 ;; put this in your .emacs file:
-;;  (add-to-list 'load-path "~/elisp/apigee")
-;;  (require 'apigee)
+;; (use-package apigee
+;;   :if (file-exists-p "~/elisp/apigee/apigee.el")
+;;   :load-path "~/elisp/apigee"
+;;   :defer t
+;;   :commands (apigee-new-proxy apigee-lint-asset)
+;;   :config
+;;     ...)
 ;;
 ;; Then, you can invoke various commands:
 ;;
@@ -1671,7 +1676,7 @@ if necessary."
   (let ((homedir (concat (getenv "HOME") "/"))
         (candidate-list (cons default-directory (apigee--fresh-recent-asset-homes nil))))
     (let ((containing-dir
-           (ido-completing-read
+           (ido-completing-read ;; why is this ido-completing-read, not just completing-read?
             "containing directory?: "
             (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
                     (delq nil (delete-dups candidate-list))) nil nil nil)))
@@ -1740,7 +1745,7 @@ PROMPT-ARG - whether invoked with a prefix
   (let ((alist-sym (intern (format "apigee--%s-template-alist" asset-type))))
     (let ((asset-name (read-string (format "%s name?: " asset-type) nil nil nil))
           (template
-           (ido-completing-read
+           (ido-completing-read  ;; why ido?
             (format "%s template: " asset-type)
             (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
             nil nil nil))
