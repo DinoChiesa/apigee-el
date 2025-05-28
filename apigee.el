@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-May-27 16:45:45>
+;; Last-saved : <2025-May-27 18:30:11>
 ;;
 ;;; Commentary:
 ;;
@@ -69,7 +69,7 @@
 
 (require 's) ;; magnars' long lost string library
 (require 'seq)
-(require 'popup)
+;;(require 'popup)
 (require 'xml)
 (require 'compile)
 (require 'xml-to-string)
@@ -86,7 +86,8 @@
   "a list of directories recently used to store API Proxies.")
 
 (defvar apigee--verbose-logging nil
-  "whether this module should log verbosely into *Messages*. This is an on/off variable. Set it to a truthy value to get logging.")
+  "whether this module should log verbosely into *Messages*. This is an on/off
+variable. Set it to a truthy value to get logging.")
 
 (defvar apigee--timer-minutes 6
   "length of the interval in minutes between persisting apigee-el settings.")
@@ -95,7 +96,9 @@
   "cancellable timer, for saving apigee-emacs settings.")
 
 (defvar apigee--list-of-vars-to-store-and-restore
-  (list "apigee--verbose-logging" "apigee--recently-used-asset-homes" "apigee--base-template-dir" "apigee--timer-minutes" "apigee-organization" "apigee-environment" "apigee-service-account")
+  (list "apigee--verbose-logging" "apigee--recently-used-asset-homes"
+        "apigee--base-template-dir" "apigee--timer-minutes" "apigee-organization"
+        "apigee-environment" "apigee-service-account")
   "a list of variables to store/restore in the settings file.")
 
 (defvar apigee--settings-file-base-name "apigee-el.dat")
@@ -108,7 +111,7 @@
     (lint .  "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
     ))
 
-;; to modify after program starts:
+;; To modify one of the above after program starts:
 ;; (setf (alist-get 'lint apigee-commands-alist)
 ;;      "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
 
@@ -276,16 +279,24 @@ via, for example,
   "The comma-separated list of plugins to exclude from apigeelint")
 
 (defvar apigee--policy-template-alist nil
-  "An alist. For each element, the cons is a policy type name, eg \"AccessEntity\", and the cadr is a list of strings, each of which is a filename referring to a template for the policy. The actual filename will be in (apigee--join-path-elements apigee--base-template-dir \"policies\" policy-type filename)")
+  "An alist. For each element, the cons is a policy type name, eg
+\"AccessEntity\", and the cadr is a list of strings, each of which is a
+filename referring to a template for the policy. The actual filename
+will be in (apigee--join-path-elements apigee--base-template-dir
+\"policies\" policy-type filename)")
 
 (defvar apigee--proxy-template-alist nil
-  "An alist, relating a name to a proxy template. The cadr of each entry is a string, a directory name, containing the exploded proxy template.")
+  "An alist, relating a name to a proxy template. The cadr of each entry is a
+string, a directory name, containing the exploded proxy template.")
 
 (defvar apigee--target-template-alist nil
-  "An alist, relating a name to a target template. The cadr of each entry is a string, a file name, containing the target template.")
+  "An alist, relating a name to a target template. The cadr of each entry is a
+string, a file name, containing the target template.")
 
 (defvar apigee--sharedflow-template-alist nil
-  "An alist, relating a name to a template for a sharedflow. The cadr of each entry is a string, a directory name, containing the exploded sharedflow template.")
+  "An alist, relating a name to a template for a sharedflow. The cadr of each
+entry is a string, a directory name, containing the exploded sharedflow
+template.")
 
 
 (defun apigee-get-lint-exclusions()
@@ -298,7 +309,9 @@ via, for example,
   (apigee--join-path-elements user-emacs-directory apigee--settings-file-base-name))
 
 (defun apigee--restore-state ()
-  "function expected to be called on initial module load, that restores the previous state of the module. Things like the most recently used apiproxy home, or the most recently loaded templates directory."
+  "function expected to be called on initial module load, that restores the
+previous state of the module. Things like the most recently used
+apiproxy home, or the most recently loaded templates directory."
   (let ((dat-file-path (apigee--path-to-settings-file)))
     (if (file-exists-p dat-file-path)
         (with-temp-buffer
@@ -315,12 +328,12 @@ via, for example,
       )))
 
 (defun apigee--persist-state ()
-  "function expected to be called periodically to store the state
-of the module. Things like the most recently used apiproxy home,
-the most recently used org and environment, or the most recently
-loaded templates directory. See the list of settings in
-`apigee--list-of-vars-to-store-and-restore'. "
+  "This function stores the state of the module. Things like the most
+recently used apiproxy home, the most recently used org and environment,
+or the most recently loaded templates directory. See the list of
+settings in `apigee--list-of-vars-to-store-and-restore'.
 
+It is expected that this function will be called periodically."
   (setq apigee--recently-used-asset-homes (apigee--fresh-recent-asset-homes t))
   (let ((dat-file-path (apigee--path-to-settings-file))
         (alist-to-write nil))
@@ -334,7 +347,7 @@ loaded templates directory. See the list of settings in
       (insert (concat ";; Stored: " (current-time-string)))
       (newline)
       (let ((print-length nil)) ;; to avoid truncating
-        (pp alist-to-write (current-buffer))))))  ;; print
+        (pp alist-to-write (current-buffer))))))
 
 (defun apigee--join-path-elements (root &rest dirs)
   "Joins a series of directories together, inserting slashes as necessary,
@@ -410,9 +423,9 @@ lexicographically by the car of each element, which is a string."
     (buffer-substring-no-properties (point-min) (point-max))))
 
 (defun apigee--templates-for-one-policy-type (policy-type-directory)
-  "loads the policy templates for one POLICY-TYPE-DIRECTORY, which is a fully-qualified
-directory, ending in a policy-type name eg AccessEntity.  This is used to
-populate the menu of available policy templates."
+  "loads the policy templates for one POLICY-TYPE-DIRECTORY, which is a fully-
+qualified directory, ending in a policy-type name eg AccessEntity.  This
+is used to populate the menu of available policy templates."
   (let (templ-list)
     (dolist (this-template (apigee--proper-files policy-type-directory ".xml"))
       (push (file-name-nondirectory this-template) templ-list))
@@ -455,7 +468,7 @@ Within that child dir, one or more template files, each ending in .xml,
 which contain templates for the policy. The name of the file will be
 the name of the template in the resulting menu.
 
-The apigee--policy-template-alist gets set with something like this:
+The `apigee--policy-template-alist' gets set with something like this:
 
   ((\"AccessEntity\"
     (\"app.xml\" \"basic.xml\" \"developer.xml\"))
@@ -469,9 +482,7 @@ The apigee--policy-template-alist gets set with something like this:
 Each item in the list is a list, (POLICY-TYPE (TEMPLATE...)),
 where POLICY-TYPE is one of {Quota, XMLToJSON, Javascript, etc},
 and TEMPLATE is the shortname of the file containing a template
-to fill in for a new policy.
-
-"
+to fill in for a new policy."
   (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "policies")))
     (setq
      apigee--policy-template-alist
@@ -488,9 +499,10 @@ to fill in for a new policy.
 (defun apigee-load-target-templates ()
   "Load target templates from the target template dir.
 
-Each child under the template directory should be a .xml file defining a target.
-The name of the file will be the name of the template in the resulting menu.
-"
+Each child under the template directory should be a .xml file defining a
+target. The name of the file will be the name of the template in the
+resulting menu."
+
   (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "targets" )))
     (setq apigee--target-template-alist
           (let (template-list)
@@ -510,8 +522,7 @@ The name of the file will be the name of the template in the resulting menu.
 
 Under TOP-LEVEL-DIR there should be sub-directories named \"policies\", \"proxies\",
 and \"sharedflows\".
-Within each of those, there will be templates for those entities.
-"
+Within each of those, there will be templates for those entities."
   (interactive
    (list
     (read-directory-name
@@ -592,14 +603,15 @@ account."
   "trims the .xml suffix from a template file name"
   (s-chop-suffix ".xml" s))
 
-(defun apigee--get-menu-position ()
-  "get the position for the popup menu"
-  (if (fboundp 'posn-at-point)
-      (let ((x-y (posn-x-y (posn-at-point (point)))))
-        (list (list (+ (car x-y) 10)
-                    (+ (cdr x-y) 20))
-              (selected-window)))
-    t))
+;; 20250527-1816 - not needed now that I'm using the minibuffer
+;; (defun apigee--get-menu-position ()
+;;   "get the position for the popup menu"
+;;   (if (fboundp 'posn-at-point)
+;;       (let ((x-y (posn-x-y (posn-at-point (point)))))
+;;         (list (list (+ (car x-y) 10)
+;;                     (+ (cdr x-y) 20))
+;;               (selected-window)))
+;;     t))
 
 (defun apigee--find-bundle (flavor) ;; "apiproxy" or "sharedflowbundle"
   "returns list of (PATH TYPE) if a bundle is found in the current directory."
@@ -641,7 +653,6 @@ then the return value is: ~/foo/bar/APINAME/
 It always ends in slash.
 
 If not in a bundle, then it returns....nil
-
 "
   (let ((path
          (apigee--insure-trailing-slash
@@ -654,7 +665,6 @@ If not in a bundle, then it returns....nil
          (concat (apigee--root-path-of-bundle) "apiproxy/targets/" tname ".xml")))
     (not (file-exists-p filename-to-check))))
 
-
 (defun apigee--suggested-target-name (template-name)
   "suggest a name for a target given a TEMPLATE-NAME for the target.
 Based on file availability."
@@ -666,18 +676,36 @@ Based on file availability."
               tname (funcall next-name val)))
       tname)))
 
+(defun apigee--policy-sort (candidates)
+  "Sorts the apigee policy candidates by name"
+  (sort candidates :lessp #'string<))
+
+(defun apigee--selection-completion-fn (candidates)
+  "Returns a function to be used as the completions parameter in
+`completing-read'. The idea is to provide a category, which
+allows `icomplete-vertical' to sort alphabetically."
+  (let ((candidates candidates))
+    (lambda (string pred action)
+      (if (eq action 'metadata)
+          `(metadata (category . apigee-policy))
+        (complete-with-action action candidates string pred)))))
+
+(add-to-list 'completion-category-overrides
+             `(apigee-policy
+               (styles . (substring))
+               (cycle-sort-function . ,#'apigee--policy-sort)))
 
 ;;;###autoload
 (defun apigee-add-target ()
   "Invoke this interactively, and the fn will prompt the user to
-choose a target type to insert.
-"
+choose a target type to insert."
   (interactive)
   (let ((apiproxy-dir (apigee--root-path-of-bundle))
         (template-name
-         (ido-completing-read ;; TODO: why is this ido?  And not just completing-read?
-          (format "target template: ")
-          (mapcar (lambda (x) (car x)) apigee--target-template-alist)
+         (completing-read
+          "target template: "
+          (apigee--selection-completion-fn
+           (mapcar (lambda (x) (car x)) apigee--target-template-alist))
           nil nil nil)))
     (when template-name
       (let ((target-dir (concat apiproxy-dir "apiproxy/targets/"))
@@ -716,124 +744,88 @@ choose a target type to insert.
             (message "yank to add the RouteRule declaration...")
             ))))))
 
+(defun apigee--transform-policy-alist (input-alist)
+  "Transforms the given alist according to the specified format.
+Input: ((KEY (SUBKEY1.xml SUBKEY2.xml ...)) ...)
+Output: ((KEY . ((SUBKEY1) (SUBKEY2) ...)) ...)
 
-(defun apigee--generate-policy-menu ()
-  "From the filesystem of policy templates, generate a keymap suitable for
-use as a menu in `x-popup-menu' .
+Suitable for use with `apigee--select-cascaded-choices'. "
+  (mapcar
+   (lambda (top-level-entry)
+     (let ((key (car top-level-entry))
+           (filename-list (cadr top-level-entry)))
+       (cons key
+             (mapcar
+              (lambda (filename-string)
+                (list (file-name-sans-extension filename-string)))
+              filename-list))))
+   input-alist))
 
-The output is a list of the form (TITLE PANE1 PANE2...), where
-each pane is a list of form (TITLE ITEM1 ITEM2...).  Each ITEM is
-a cons cell (STRING . VALUE), where the VALUE is a cons cell
-containing the policy type and template name.
+(defun apigee--select-cascaded-choices (choices-data)
+  "Presents a cascaded list of choices to the user using `completing-read'.
+CHOICES-DATA is an alist where each element is (STRING . SUBLIST).
+SUBLIST is another such alist, or nil/empty-list if STRING is a final choice.
+Returns the path of selected items as a list of strings, or nil if aborted."
+  (let ((current-level-data choices-data)
+        (prompt-base "Select")
+        (selected-path nil) ; Stores the actual selections (strings)
+        ;; Stores the data for each level of the hierarchy we've entered
+        (history-of-data-levels (list choices-data))
+        user-final-selection)
 
-The list looks like this:
+    ;; Loop while there are valid choices at the current level
+    (while (and current-level-data
+                (listp current-level-data)
+                (consp current-level-data)) ; Ensure current-level-data is a non-empty list
+      (let* ((current-options (mapcar #'car current-level-data))
+             (effective-options current-options)
+             (is-top-level (eq current-level-data choices-data)))
 
-  (\"Undisplayed Title\"
-   (\"AccessControl\"
-    (\"basic\" \"AccessControl\" . \"basic.xml\"))
-   (\"BasicAuthentication\"
-    (\"Encode Outbound\" \"BasicAuthentication\" . \"Encode Outbound.xml\")
-    (\"Decode Inbound\" \"BasicAuthentication\" . \"Decode Inbound.xml\"))
-    ...
-   (\"XSL\"
-    (\"basic.xml\" \"XSL\" . \"basic.xml\")))
+        ;; Add "<Back>" option if not at the top level
+        (unless is-top-level
+          (setq effective-options (cons "<Back>" effective-options)))
 
+        (let* ((prompt (if selected-path
+                           (format "%s (%s): " prompt-base (mapconcat #'identity selected-path " > "))
+                         (format "%s: " prompt-base)))
+               (raw-selection (completing-read prompt
+                                               (apigee--selection-completion-fn effective-options) nil t)))
 
-The intention is to provide input to `x-popup-menu', to display a cascading,
-multi-level popup menu.
+          (unless raw-selection ; User aborted (e.g., C-g)
+            (message "Selection aborted.")
+            (cl-return-from my-select-cascaded-choices nil))
 
-When a selection is made, the result is the VALUE.
+          (cond
+           ((equal raw-selection "<Back>")
+            (pop selected-path)
+            (pop history-of-data-levels) ; Remove current level's data from history
+            (setq current-level-data (car history-of-data-levels))) ; Set to previous data
 
-"
-  (let ((candidates
-         (seq-sort-by #'car #'string< (copy-sequence apigee--policy-template-alist))))
+           (t
+            (let* ((selected-assoc (assoc raw-selection current-level-data))
+                   (next-level-data (cdr selected-assoc)))
 
-    (let ((sort-by-name (lambda (a b) (not (string< (downcase a) (downcase b))))))
-      (cons "Undisplayed Title"
-            (mapcar (lambda (template-set)
-                      (let* ((policy-type (car template-set))
-                             (templates (sort (copy-sequence (cadr template-set)) sort-by-name)))
-                        (cons policy-type
-                              (mapcar
-                               (lambda (item) (cons
-                                               (apigee--trim-xml-suffix item) ;; shortname
-                                               (cons policy-type item)))
-                               templates))
-                        ))
-                    candidates))))
-  )
+              (push raw-selection selected-path) ; Add current selection to path
 
-
-;; (defun apigee--convert-policy-alist-to-popup-menu-spec ()
-;;   "convert apigee--policy-template-alist like
-;; ((\"XSL\"
-;;   (\"basic.xml\"))
-;;  (\"XMLToJSON\"
-;;   (\"full options.xml\" \"strip and treat as array.xml\"))
-;;   ...
-;;
-;; into a spec for popup-cascade-menu "
-;;
-;;   (let ((sorted-list
-;;          (seq-sort-by #'car #'string< (copy-sequence apigee--policy-template-alist))))
-;;     (mapcar (lambda (category-and-templates)
-;;               (let ((category (car category-and-templates))
-;;                     (templates (cadr category-and-templates)))
-;;               (cons
-;;                category
-;;                (mapcar
-;;                 (lambda (tmpl)
-;;                   (popup-make-item
-;;                    (apigee--trim-xml-suffix tmpl)
-;;                    ;; :summary
-;;                    ;; (apigee--trim-xml-suffix tmpl)
-;;                    :value
-;;                    (list (intern category)
-;;                          (apigee--join-path-elements category tmpl))))
-;;                 templates))))
-;;             sorted-list)))
+              ;; Check if there are further sub-choices
+              (if (and next-level-data (listp next-level-data) (consp next-level-data))
+                  ;; There are more choices (next-level-data is a non-empty list of choices)
+                  (progn
+                    (setq current-level-data next-level-data)
+                    (push current-level-data history-of-data-levels))
+                ;; This is a final choice (next-level-data is nil, empty, or not a valid submenu)
+                (progn
+                  (setq user-final-selection (nreverse selected-path))
+                  (setq current-level-data nil))))))))) ; Terminate loop by setting current-level-data to nil
+    user-final-selection))
 
 (defun apigee--prompt-user-with-policy-choices ()
-  "Prompt the user with the available choices.
-In this context the available choices is the hierarchical list
-of available policies.
-"
+  "Prompt the user with the available choices. In this context, the
+available choices is the hierarchical list of available policies."
   (interactive)
-  ;; 20220427-1042
-  ;; x-popup-menu crashes on emacs 28.1
-  ;; or, maybe it was because I was using it incorrectly.
-  ;; as of 20231218-1424, it seems to be working correctly.
-  (x-popup-menu (apigee--get-menu-position)
-                (apigee--generate-policy-menu))
+  (apigee--select-cascaded-choices
+   (apigee--transform-policy-alist apigee--policy-template-alist)))
 
-  ;; popup-cascade-menu works, sort of.  The cascading is sort of messy.  That's
-  ;; just an effect of how the length of the prefix is constructed in
-  ;; popup-create. I couldn't figure it out in popup.el.
-
-  ;; Can customize the face with:
-  ;;(set-face-attribute 'popup-menu-face nil :height 105)
-  ;;(set-face-attribute 'popup-menu-selection-face nil :height 105)
-
-  ;; But ... this will apply to all popups. Anything that uses popup.el. ??
-
-  ;; Omitting the height param... allows a better view of the toplevel menu,
-  ;; which is nice. But selecting from that level results in an error, "args out
-  ;; of range" in fn `popup-line-overlay'.  I was not able to diagnose that.
-  ;; So I keep the height and ... suffer with poor UI?
-
-  ;; (popup-cascade-menu (apigee--convert-policy-alist-to-popup-menu-spec)
-  ;;                     ;;:height (length apigee--policy-template-alist)
-  ;;                     :height 10
-  ;;                     :margin-left 2
-  ;;                     :max-width 21
-  ;;                     :margin-right 1
-  ;;                     :around t
-  ;;                     :scroll-bar t
-  ;;                     :isearch t
-  ;;                     )
-
-
-  )
 
 (defun apigee--is-existing-directory (dir-name)
   "Tests to see whether a name refers to an existing directory."
@@ -1313,7 +1305,7 @@ appropriate.
     (when choice ;; is a cons cell
       (let ((policy-dir (concat bundle-dir bundle-type "/policies/"))
             (ptype (car choice))
-            (template-filename (cdr choice))
+            (template-filename (concat (cadr choice) ".xml"))
             (have-name nil)
             (policy-name-prompt "policy name: "))
         (and (not (file-exists-p policy-dir))
@@ -1385,7 +1377,7 @@ is visiting a policy file. otherwise nil."
                 fq-names))))
 
 (defun apigee-rename-policy ()
-  "rename a policy to a new name"
+  "Rename a policy to a new name"
   (interactive)
   (let ((current-policies (apigee--list-policies))
         (predicate-ignored nil)
@@ -1394,9 +1386,10 @@ is visiting a policy file. otherwise nil."
         (hist nil)
         (def (apigee--current-policy-name)))
     (let* ((name-of-policy-to-rename
-            (ido-completing-read "rename policy: " current-policies
-                                 predicate-ignored require-match initial-input hist def))
-           ;; todo: replace this. Don't need a completing read here. Just a read.
+            (completing-read "rename policy: "
+                             (apigee--selection-completion-fn
+                              current-policies)
+                             predicate-ignored require-match initial-input hist def))
            (new-name (read-string (format "rename '%s' to : " name-of-policy-to-rename)
                                   name-of-policy-to-rename nil name-of-policy-to-rename)))
 
@@ -1545,7 +1538,6 @@ is visiting a policy file. otherwise nil."
        (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
   (nth 0 file-list))
 
-
 (defun apigee--copy-subdirs (subdirs source-dir dest-dir)
   (while subdirs
     (let* ((this-dir (car subdirs))
@@ -1649,10 +1641,10 @@ CONTAINING-DIR - name of an existing directory into which to insert the new asse
 
 (defun apigee--fresh-recent-asset-homes (with-time)
   "returns the list of recently used asset homes, eliminating stale entries
-and non-existent directories, in sorted order.  If WITH-TIME is non-nil, emit
-the list with time (suitable for persisting). Otherwise without - it will be a
-bare list of strings representing directory paths, suitable for use within an
-`ido-completing-read'."
+and non-existent directories, in sorted order.  If WITH-TIME is non-nil,
+emit the list with time (suitable for persisting). Otherwise without -
+it will be a bare list of strings representing directory paths, suitable
+for use within an `completing-read'."
   (let ((result
          (let ((days-considered-stale 30))
            (-sort (lambda (a b)
@@ -1676,10 +1668,11 @@ if necessary."
   (let ((homedir (concat (getenv "HOME") "/"))
         (candidate-list (cons default-directory (apigee--fresh-recent-asset-homes nil))))
     (let ((containing-dir
-           (ido-completing-read ;; why is this ido-completing-read, not just completing-read?
+           (completing-read
             "containing directory?: "
-            (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
-                    (delq nil (delete-dups candidate-list))) nil nil nil)))
+            (apigee--selection-completion-fn
+             (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
+                     (delq nil (delete-dups candidate-list)))) nil nil nil)))
       (and (not (file-exists-p containing-dir))
            (make-directory containing-dir t))
       containing-dir)))
@@ -1694,9 +1687,8 @@ When invoked with a prefix, this fn will prompt the user also for
 the name of the directory in which to store the apiproxy.
 
 When invoked without a prefix, it uses the most recent asset home
-directory. If no directory has ever been used, it prompts for the directory.
-
-"
+directory. If no directory has ever been used, it prompts for the
+directory."
   (interactive "P")
   (apigee--new-asset "proxy" arg))
 
@@ -1710,9 +1702,8 @@ When invoked with a prefix, this fn will prompt the user also for
 the name of the directory in which to store the sharedflow.
 
 When invoked without a prefix, it uses the most recent asset home
-directory. If no directory has ever been used, it prompts for the directory.
-
-"
+directory. If no directory has ever been used, it prompts for the
+directory."
   (interactive "P")
   (apigee--new-asset "sharedflow" arg))
 
@@ -1733,7 +1724,8 @@ When invoked with a prefix, this fn will prompt the user also for
 the name of the directory in which to store the asset.
 
 When invoked without a prefix, it uses the most recent asset home
-directory. If no directory has ever been used, it prompts for the directory.
+directory. If no directory has ever been used, it prompts for the
+directory.
 
 This fn is not intended to be called directly.
 
@@ -1745,9 +1737,10 @@ PROMPT-ARG - whether invoked with a prefix
   (let ((alist-sym (intern (format "apigee--%s-template-alist" asset-type))))
     (let ((asset-name (read-string (format "%s name?: " asset-type) nil nil nil))
           (template
-           (ido-completing-read  ;; why ido?
+           (completing-read
             (format "%s template: " asset-type)
-            (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
+            (apigee--selection-completion-fn
+             (mapcar (lambda (x) (car x)) (symbol-value alist-sym)))
             nil nil nil))
           (containing-dir
            (if prompt-arg
@@ -1761,14 +1754,15 @@ PROMPT-ARG - whether invoked with a prefix
 (eval-after-load "apigee"
   '(progn
 
-     ;; override the impl in popup.el - it's broken for me for cascaded menus - 20230627-1541
-     (defun popup-child-point (popup &optional offset)
-       (overlay-end
-        (popup-line-overlay popup (popup-selected-line popup))))
+     ;; 20250527-1829 - no longer using popup.
+     ;; ;; override the impl in popup.el - it's broken for me for cascaded menus - 20230627-1541
+     ;; (defun popup-child-point (popup &optional offset)
+     ;;   (overlay-end
+     ;;    (popup-line-overlay popup (popup-selected-line popup))))
 
-     ;; customize the popup font
-     (set-face-attribute 'popup-menu-face nil :height 105)
-     (set-face-attribute 'popup-menu-selection-face nil :height 105)
+     ;;      ;; customize the popup font
+     ;; (set-face-attribute 'popup-menu-face nil :height 105)
+     ;; (set-face-attribute 'popup-menu-selection-face nil :height 105)
 
      (apigee--restore-state)
      (if (not apigee--base-template-dir)
