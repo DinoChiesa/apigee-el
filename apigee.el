@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-May-31 17:18:37>
+;; Last-saved : <2025-June-01 13:02:03>
 ;;
 ;;; Commentary:
 ;;
@@ -72,7 +72,7 @@
 (require 'xml)
 (require 'compile)
 (require 'dino-utility)
-(require 'dino-sane-sorting)
+(require 'dpc-sane-sorting)
 (require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
 (require 'cl-lib) ; For assoc-if
