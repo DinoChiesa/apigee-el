@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-May-27 18:30:11>
+;; Last-saved : <2025-May-31 17:18:37>
 ;;
 ;;; Commentary:
 ;;
@@ -69,9 +69,10 @@
 
 (require 's) ;; magnars' long lost string library
 (require 'seq)
-;;(require 'popup)
 (require 'xml)
 (require 'compile)
+(require 'dino-utility)
+(require 'dino-sane-sorting)
 (require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
 (require 'cl-lib) ; For assoc-if
@@ -676,25 +677,6 @@ Based on file availability."
               tname (funcall next-name val)))
       tname)))
 
-(defun apigee--policy-sort (candidates)
-  "Sorts the apigee policy candidates by name"
-  (sort candidates :lessp #'string<))
-
-(defun apigee--selection-completion-fn (candidates)
-  "Returns a function to be used as the completions parameter in
-`completing-read'. The idea is to provide a category, which
-allows `icomplete-vertical' to sort alphabetically."
-  (let ((candidates candidates))
-    (lambda (string pred action)
-      (if (eq action 'metadata)
-          `(metadata (category . apigee-policy))
-        (complete-with-action action candidates string pred)))))
-
-(add-to-list 'completion-category-overrides
-             `(apigee-policy
-               (styles . (substring))
-               (cycle-sort-function . ,#'apigee--policy-sort)))
-
 ;;;###autoload
 (defun apigee-add-target ()
   "Invoke this interactively, and the fn will prompt the user to
@@ -704,8 +686,9 @@ choose a target type to insert."
         (template-name
          (completing-read
           "target template: "
-          (apigee--selection-completion-fn
-           (mapcar (lambda (x) (car x)) apigee--target-template-alist))
+          (dpc-ss-sort-completion-fn
+           (mapcar (lambda (x) (car x)) apigee--target-template-alist)
+           'sorted-sanely)
           nil nil nil)))
     (when template-name
       (let ((target-dir (concat apiproxy-dir "apiproxy/targets/"))
@@ -789,7 +772,8 @@ Returns the path of selected items as a list of strings, or nil if aborted."
                            (format "%s (%s): " prompt-base (mapconcat #'identity selected-path " > "))
                          (format "%s: " prompt-base)))
                (raw-selection (completing-read prompt
-                                               (apigee--selection-completion-fn effective-options) nil t)))
+                                               (dpc-ss-sort-completion-fn effective-options 'sorted-sanely)
+                                               nil t)))
 
           (unless raw-selection ; User aborted (e.g., C-g)
             (message "Selection aborted.")
@@ -1387,8 +1371,7 @@ is visiting a policy file. otherwise nil."
         (def (apigee--current-policy-name)))
     (let* ((name-of-policy-to-rename
             (completing-read "rename policy: "
-                             (apigee--selection-completion-fn
-                              current-policies)
+                             (dpc-ss-sort-completion-fn current-policies 'sorted-sanely)
                              predicate-ignored require-match initial-input hist def))
            (new-name (read-string (format "rename '%s' to : " name-of-policy-to-rename)
                                   name-of-policy-to-rename nil name-of-policy-to-rename)))
@@ -1670,9 +1653,11 @@ if necessary."
     (let ((containing-dir
            (completing-read
             "containing directory?: "
-            (apigee--selection-completion-fn
+            (dpc-ss-sort-completion-fn
              (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
-                     (delq nil (delete-dups candidate-list)))) nil nil nil)))
+                     (delq nil (delete-dups candidate-list)))
+             'sorted-sanely)
+            nil nil nil)))
       (and (not (file-exists-p containing-dir))
            (make-directory containing-dir t))
       containing-dir)))
@@ -1739,8 +1724,9 @@ PROMPT-ARG - whether invoked with a prefix
           (template
            (completing-read
             (format "%s template: " asset-type)
-            (apigee--selection-completion-fn
-             (mapcar (lambda (x) (car x)) (symbol-value alist-sym)))
+            (dpc-ss-sort-completion-fn
+             (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
+             'sorted-sanely)
             nil nil nil))
           (containing-dir
            (if prompt-arg
