@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-June-01 13:02:03>
+;; Last-saved : <2025-June-04 20:08:28>
 ;;
 ;;; Commentary:
 ;;
@@ -136,15 +136,18 @@ via, for example,
 
 (defvar apigee-placeholders-alist
   `(
-    (n .       apigee--proxy-name)
-    (o .       apigee-get-organization)
-    (e .       apigee-get-environment )
-    (sa_args . apigee-get-service-account-args-for-deployment )
-    (t .       apigee--memoized-gcloud-pat)
+    (n               . apigee--proxy-name)
+    (o               . apigee-get-organization)
+    (e               . apigee-get-environment )
+    (lint-exclusions . apigee-get-lint-exclusions )
+    (sa_args         . apigee-get-service-account-args-for-deployment )
+    (t               . apigee--memoized-gcloud-pat)
     )
   )
 
-;;(add-to-list 'apigee-placeholders-alist '(lint-exclusions . (apigee-get-lint-exclusions)))
+;; useful during development
+;;(add-to-list 'apigee-placeholders-alist '(lint-exclusions . apigee-get-lint-exclusions))
+
 
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
 (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
@@ -300,10 +303,18 @@ entry is a string, a directory name, containing the exploded sharedflow
 template.")
 
 
-(defun apigee-get-lint-exclusions()
-  "get a string representing a comma-separated set of plugins to exclude from apigeelint"
-  apigee-lint-exclusions
-  )
+(defun apigee-get-lint-exclusions (&optional want-prompt)
+  "get a string representing a comma-separated set of plugins to
+exclude from apigeelint. Uses a cached value, or, if WANT-PROMPT, will
+prompt the user."
+  (interactive "P")
+  (let ((excl-local
+         (if want-prompt
+             (apigee--read-or-default "exclusions"
+                                      apigee-lint-exclusions)
+           apigee-lint-exclusions)))
+    (setq apigee-lint-exclusions excl-local)))
+
 
 (defun apigee--path-to-settings-file ()
   "a function rturning the path to the settings file for apigee.el"
