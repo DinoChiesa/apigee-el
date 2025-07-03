@@ -1,0 +1,16 @@
+<SemanticCacheLookup name="SCL-lookup">
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <UserPromptSource>{jsonPath($.contents[-1].parts[*].text,request.content,true)}</UserPromptSource>
+  <Embeddings>
+    <VertexAI>
+      <URL>https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:predict</URL>
+    </VertexAI>
+  </Embeddings>
+  <SimilaritySearch>
+    <VertexAI>
+      <URL>https://{INDEX_ENDPOINT_SUBDOMAIN}.{LOCATION}-{PROJECT_ID}.vdb.vertexai.goog/v1/projects/{PROJECT_ID}/locations/{LOCATION}/indexEndpoints/{INDEX_ENDPOINT_ID}:findNeighbors</URL>
+      <DeployedIndexID>{DEPLOYED_INDEX_ID}</DeployedIndexID>DeployedIndexID>
+      <Threshold ref='my-variable'>0.95</Threshold>
+    </VertexAI>
+  </SimilaritySearch>
+</SemanticCacheLookup>

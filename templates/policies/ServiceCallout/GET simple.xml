@@ -12,6 +12,7 @@
   <HTTPTargetConnection>
     <SSLInfo>
       <Enabled>true</Enabled>
+      <Enforce>true</Enforce>
       <IgnoreValidationErrors>false</IgnoreValidationErrors>
     </SSLInfo>
     <Properties>

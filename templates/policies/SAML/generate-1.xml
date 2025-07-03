@@ -1,18 +1,17 @@
 <GenerateSAMLAssertion name="##" ignoreContentType="false">
-<GenerateSAMLAssertion name="SAML-Generate-Signed-Response" ignoreContentType="true">
 
   <!--
       <CanonicalizationAlgorithm></CanonicalizationAlgorithm>
   -->
-  <!-- issuer and subject values; may used fixed value or ref, not both -->
+  <!-- Issuer and Subject values; may used fixed value or ref, not both -->
   <Issuer ref='varname'>${1:urn://18CF315A-6A9A-481F-93B8-C1AB988A7D49}</Issuer>
   <Subject ref='varname'>${2:subject}</Subject>
 
-  <!-- the digest and signature algorithms -->
+  <!-- The digest and signature algorithms, optional but recommended. -->
   <DigestMethod>${3:$$(yas-choose-value (list "SHA1" "SHA256"))}</DigestMethod>
   <SignatureAlgorithm>${4:$$(yas-choose-value (list "rsa-sha1" "rsa-sha256"))}</SignatureAlgorithm>
 
-  <!-- the key and cert for signing -->
+  <!-- The key and cert for signing -->
   <KeyStore>
     <Name ref="propertyset.settings.saml_keystore"></Name>
     <Alias ref="propertyset.settings.saml_keyalias"></Alias>
@@ -23,7 +22,7 @@
     <FlowVariable>assertion.content</FlowVariable>
 
     <!-- existing message to start from -->
-    <Message name="assertion">
+    <Message name="message-that-will-get-assertion">
       <Namespaces>
         <Namespace prefix="samlp">urn:oasis:names:tc:SAML:2.0:protocol</Namespace>
       </Namespaces>

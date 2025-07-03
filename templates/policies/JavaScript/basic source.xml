@@ -1,7 +1,8 @@
 <Javascript name='JS-Calculate-Cache-Expiry' timeLimit='200'>
-  <Source>
+  <Source><![CDATA[
     var c= Number(context.getVariable('retrieveGcpToken.expires_in'));
     c-=60;
     context.setVariable('retrieveGcpToken.expires_in', c);
+  ]]>
   </Source>
 </Javascript>

@@ -15,6 +15,7 @@
   <HTTPTargetConnection>
     <SSLInfo>
         <Enabled>true</Enabled>
+        <Enforce>true</Enforce>
     </SSLInfo>
     <Properties>
       <Property name='success.codes'>2xx, 3xx</Property>

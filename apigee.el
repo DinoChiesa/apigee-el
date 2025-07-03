@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-June-13 21:15:39>
+;; Last-saved : <2025-July-03 14:03:28>
 ;;
 ;;; Commentary:
 ;;
@@ -1090,16 +1090,19 @@ Returns nil if no such item is found."
   (interactive)
   (apigee--run-command-for-proxy "apigeelint" 'lint))
 
+;;;###autoload
 (defun apigee-import-and-deploy-proxy (have-prefix)
   "Import AND deploy the API proxy."
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy have-prefix))
 
+;;;###autoload
 (defun apigee-import-proxy (have-prefix)
   "Import the API proxy."
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" 'import have-prefix))
 
+;;;###autoload
 (defun apigee-deploy-proxy (have-prefix)
   "Deploy the API proxy. This doesn't use the proxy configuration in the
 filesystem, beyond the name. It's assumed you've recently called
@@ -1107,6 +1110,7 @@ filesystem, beyond the name. It's assumed you've recently called
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" 'deploy have-prefix))
 
+;;;###autoload
 (defun apigee-inject-proxy-revision-logic ()
   "Inject the policies and flow to insert a proxy revision header
 into the response. Handy when modifying an existing proxy that
