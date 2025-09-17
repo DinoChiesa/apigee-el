@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-July-03 14:03:28>
+;; Last-saved : <2025-September-16 21:21:09>
 ;;
 ;;; Commentary:
 ;;
@@ -985,12 +985,27 @@ than a lambda to avoid edebug issues."
         (seq-reduce replacer apigee-placeholders-alist cmd)))))
 
 (defun apigee--mask-secrets ()
-  "Intended for use in `compilation-filter-hook'"
+  "Intended for use in `compilation-filter-hook'."
   (save-excursion
     (let ((inhibit-read-only t))
       (goto-char (point-min))
       (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
         (replace-match "--token ***masked***")))))
+
+(defun apigee--mask-token (unmasked-cmd)
+  "Masks tokens in a command. See also
+ `apigee--reinsert-token'"
+  (replace-regexp-in-string "--token \\([^ \n]+\\)"  "--token ***masked***" unmasked-cmd))
+
+(defun apigee--reinsert-token (masked-cmd)
+  "Re-inserts tokens into a masked command. See also
+ `apigee--mask-token'"
+  (let ((callable-fn
+         (symbol-value 'apigee--memoized-gcloud-pat)))
+    (replace-regexp-in-string  "--token \\*\\*\\*masked\\*\\*\\*"
+                               (concat "--token " (funcall callable-fn nil))
+                               masked-cmd)))
+
 
 (defun apigee--remove-compilation-filter-hook ()
   (remove-hook 'compilation-filter-hook 'apigee--mask-secrets))
@@ -1044,7 +1059,7 @@ Returns nil if no such item is found."
                                      "remote-shell" "/bin/bash")))))
           ;; 20250301-0426
           ;;
-          ;; If I use nil here for mode, I cannot mask the token, and the output
+          ;; If I use nil here for mode (later: mode?), I cannot mask the token, and the output
           ;; is not displayed very quickly. If I use t, then the code can mask
           ;; the token, and the output gets displayed much more quickly. The
           ;; experience is better.  The one downside: the compilation is shown in
@@ -1057,8 +1072,17 @@ Returns nil if no such item is found."
                  (compilation-shell-name  "/bin/bash")
                  (tramp-default-remote-shell "/bin/bash")
                  (tramp-encoding-shell "/bin/bash"))
-             (let ((buf
-                    (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)))
+             (let* ((actual-command-to-run
+                     ;; If a prefix was used, prompt the user to edit the command.
+                     ;; But mask the token during editing.
+                     (if want-prompt
+                         (let* ((command-with-token-masked (apigee--mask-token cmd))
+                                (confirmed-command-to-run
+                                 (read-shell-command "Run build command: " command-with-token-masked)))
+                           (apigee--reinsert-token confirmed-command-to-run))
+                       cmd))
+                    (buf
+                     (compilation-start (concat "cd " bundle-dir "; " actual-command-to-run) t name-function highlight-regexp)))
                (with-current-buffer buf
                  ;; obscure any token that appears
                  (save-excursion
@@ -1085,14 +1109,20 @@ Returns nil if no such item is found."
 ;;         (replace-match "--token ***masked***")))
 ;;     (setq buffer-read-only t)))))))
 
-(defun apigee-lint-asset ()
-  "Run apigeelint on the API proxy."
-  (interactive)
-  (apigee--run-command-for-proxy "apigeelint" 'lint))
+(defun apigee-lint-asset (have-prefix)
+  "Run apigeelint on the API proxy.
+
+With a prefix argument (e.g., C-u), prompt the user to edit
+the command before running it."
+  (interactive "P")
+  (apigee--run-command-for-proxy "apigeelint" 'lint have-prefix))
 
 ;;;###autoload
 (defun apigee-import-and-deploy-proxy (have-prefix)
-  "Import AND deploy the API proxy."
+  "Import AND deploy the API proxy.
+
+With a prefix argument (e.g., C-u), prompt the user for org/env
+before running it."
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy have-prefix))
 
