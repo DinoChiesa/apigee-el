@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-September-16 21:21:09>
+;; Last-saved : <2025-November-15 12:41:05>
 ;;
 ;;; Commentary:
 ;;
@@ -104,12 +104,20 @@ variable. Set it to a truthy value to get logging.")
 
 (defvar apigee--settings-file-base-name "apigee-el.dat")
 
+(defvar apigee-xmlschema-validator-home "Apigee-Policy-Schema"
+  "The directory that holds the Apigee policy schema and validator tool.
+If this is a relative directory, it will be resolved relative to the
+directory containing the apigee.el file.
+You need to have created the venv (in either .venv or venv) and installed
+the prerequisites via `pip install -r requirements.txt`")
+
 (defvar apigee-commands-alist
   '(
     (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
     (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
     (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
     (lint .  "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
+    (validate .  "%validate-cmd --source .")
     ))
 
 ;; To modify one of the above after program starts:
@@ -121,6 +129,7 @@ variable. Set it to a truthy value to get logging.")
     (gcloud . "gcloud")
     (apigeecli . "apigeecli")
     (apigeelint . "node ~/path/to/apigeelint/cli.js")
+    (validate-cmd . apigee--get-xmlschema-validator-program)
     )
   "apigee.el will use `executable-find' to locate the programs on the path. If
 you want to avoid that, you can set the path explicitly in your emacs init file,
@@ -414,11 +423,12 @@ Optionally filters on files with the given extension or SUFFIX."
   (sort strings
         (lambda (a b) (string< a b ))))
 
-(defun apigee--sort-by-string-car (list-o-lists)
-  "sort LIST-O-LISTS, a list of lists, each of the form (STRING (LIST)),
+(defun apigee--sort-by-string-car (list-o-lists)
+
+       "sort LIST-O-LISTS, a list of lists, each of the form (STRING (LIST)),
 lexicographically by the car of each element, which is a string."
-  (sort list-o-lists
-        (lambda (a b) (string< (car a) (car b) ))))
+       (sort list-o-lists
+             (lambda (a b) (string< (car a) (car b) ))))
 
 (defun apigee--get-target-template-filename (template-filename)
   "return the fullpath name of the target template file.
@@ -928,6 +938,36 @@ expects it."
 
 (setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
 
+(defun apigee--get-xmlschema-validator-program ()
+  "Resolves the command for the XML Schema validator program.
+It constructs the path to the Python executable within the virtual
+environment and the 'validateBundle.py' script, relative to
+'apigee-xmlschema-validator-home'."
+  (if-let* ((apigee-el-dir (file-name-directory apigee--load-file-name))
+            (base-dir (if (file-name-absolute-p apigee-xmlschema-validator-home)
+                          apigee-xmlschema-validator-home
+                        (file-truename (apigee--join-path-elements apigee-el-dir apigee-xmlschema-validator-home))))
+            (_ (apigee--is-existing-directory base-dir))
+            (py-dir (apigee--join-path-elements base-dir "py"))
+            (_ (apigee--is-existing-directory py-dir))
+            (venv-name (seq-find
+                        (lambda (v)
+                          (apigee--is-existing-directory (apigee--join-path-elements py-dir v)))
+                        '(".venv" "venv")))
+            (full-venv-dir (apigee--join-path-elements py-dir venv-name)) ; This is the path to the .venv or venv directory itself
+            (validate-script (apigee--join-path-elements py-dir "validateBundle.py"))
+            (_ (file-exists-p validate-script))) ; Check if validateBundle.py exists
+      (let* ((python-executable-suffix
+              (cond
+               ((memq system-type '(gnu/linux darwin)) "bin/python") ; Linux, macOS, WSL
+               ((eq system-type 'windows-nt) "Scripts/python.exe") ; Native Windows Emacs
+               (t "python"))) ; Fallback or other systems
+             (python-path (apigee--join-path-elements full-venv-dir python-executable-suffix)))
+        (if (file-exists-p python-path)
+            (format "%s %s" python-path validate-script)
+          (error (format "Python executable not found at %s" python-path))))
+    (error "Could not resolve XML Schema validator program. Check 'apigee-xmlschema-validator-home'")))
+
 (defun apigee--proxy-name (&rest ignored)
   "Returns the short name for an API proxy. It accepts an argument
 because the logic in `apigee--replace-placeholder' expects it."
@@ -959,21 +999,47 @@ than a lambda to avoid edebug issues."
               acc)
           acc)))))
 
-(defun apigee--resolve-program (pgm)
-  (if (s-contains? " " pgm) pgm (executable-find pgm)))
+(defun apigee--resolve-program (pgm-str-or-fn)
+  "Resolve the program. PGM-STR-OR-FN is either a string or a function.
+If a function, then invoke it and take the string value of
+that. Otherwise use PGM-STR-OR-FN as the resulting string.
+
+If the resulting string contains spaces (e.g., 'node script.js'), split
+the string, resolve the executable path for the first element using
+`executable-find`, and then re-assemble the command and return
+it. Otherwise, use `executable-find` directly on the resulting string."
+  (let ((pgm
+         (if (functionp pgm-str-or-fn)
+             (funcall pgm-str-or-fn)
+           pgm-str-or-fn)))
+    (if (s-contains? " " pgm)
+        (let* ((parts (s-split " " pgm t))
+               (executable (car parts))
+               (resolved-executable (executable-find executable)))
+          (if resolved-executable
+              (s-join " " (cons resolved-executable (cdr parts)))
+            ;; If executable-find fails for the first part, the program cannot be resolved
+            nil))
+      (executable-find pgm))))
 
 (defun apigee--replace-program (acc item)
+  "Helper for seq-reduce. Replaces placeholders in ACC with resolved program paths.
+ITEM is a cons cell from `apigee-programs-alist` (KEY . VALUE).  VALUE
+can be a string (the program name/path) or a function symbol that, when
+called, returns the program name/path string."
   (let* ((key (car item))
+         (program-val (cdr item)) ; Can be a string or a function symbol
          (replaceable (concat "%" (symbol-name key))))
     (if (s-contains? replaceable acc)
-        (let ((resolved-pgm (apigee--resolve-program (cdr item))))
-          (if (not resolved-pgm)
-              (error (format "cannot resolve %s" gcloud-pgm)))
-          (replace-regexp-in-string replaceable resolved-pgm acc))
+        (progn
+          (let ((resolved-pgm (apigee--resolve-program program-val)))
+            (if (not resolved-pgm)
+                (error (format "cannot resolve program '%s'" command-str)))
+            (replace-regexp-in-string replaceable resolved-pgm acc)))
       acc)))
 
 (defun apigee--get-command (symbol want-prompt)
-  "get the apigeelint command for the current API proxy."
+  "get the command to run (eg apigeelint, apigeecli, etc) for the current API proxy."
   (let ((cmd (alist-get symbol apigee-commands-alist)))
     (when cmd
       (setq cmd
@@ -1082,7 +1148,12 @@ Returns nil if no such item is found."
                            (apigee--reinsert-token confirmed-command-to-run))
                        cmd))
                     (buf
-                     (compilation-start (concat "cd " bundle-dir "; " actual-command-to-run) t name-function highlight-regexp)))
+                     (compilation-start
+                      ;; 20251115-1240
+                      ;; it seems comint sets a default-directory without the need for cd.
+                      ;;(concat "cd " bundle-dir "; " actual-command-to-run)
+                      actual-command-to-run
+                      t name-function highlight-regexp)))
                (with-current-buffer buf
                  ;; obscure any token that appears
                  (save-excursion
@@ -1116,6 +1187,14 @@ With a prefix argument (e.g., C-u), prompt the user to edit
 the command before running it."
   (interactive "P")
   (apigee--run-command-for-proxy "apigeelint" 'lint have-prefix))
+
+(defun apigee-validate-xml-for-asset (have-prefix)
+  "Run the XML Validator on the API proxy.
+
+With a prefix argument (e.g., C-u), prompt the user to edit
+the command before running it."
+  (interactive "P")
+  (apigee--run-command-for-proxy "validate" 'validate have-prefix))
 
 ;;;###autoload
 (defun apigee-import-and-deploy-proxy (have-prefix)
@@ -1801,7 +1880,7 @@ PROMPT-ARG - whether invoked with a prefix
      (if apigee--base-template-dir
          (apigee-load-templates apigee--base-template-dir))
      (setq apigee-timer
-           (run-with-timer (* 60 apigee--timer-minutes) (* 60 apigee--timer-minutes) 'apigee--persist-state))))
+      (run-with-timer (* 60 apigee--timer-minutes) (* 60 apigee--timer-minutes) 'apigee--persist-state))))
 
 (provide 'apigee)
 

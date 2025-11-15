@@ -1,8 +1,11 @@
 
 **/Icon*
-**/Icon
-*/Icon
-Icon
+**/Icon
+
+*/Icon
+
+Icon
+
 
 **/#*.*#
 **/*.*~
@@ -11,3 +14,4 @@ Icon
 
 **/*.class
 
+.aider*
