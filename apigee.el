@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-November-15 12:41:05>
+;; Last-saved : <2025-November-15 17:19:57>
 ;;
 ;;; Commentary:
 ;;
@@ -372,7 +372,8 @@ It is expected that this function will be called periodically."
 
 (defun apigee--join-path-elements (root &rest dirs)
   "Joins a series of directories together, inserting slashes as necessary,
-like Python's os.path.join."
+like Python's os.path.join. TODO: figure out why I should not just use
+`file-name-concat'"
   (if (not dirs)
       root
     (apply 'apigee--join-path-elements
@@ -423,12 +424,12 @@ Optionally filters on files with the given extension or SUFFIX."
   (sort strings
         (lambda (a b) (string< a b ))))
 
-(defun apigee--sort-by-string-car (list-o-lists)
+(defun apigee--sort-by-string-car (list-o-lists)
 
-       "sort LIST-O-LISTS, a list of lists, each of the form (STRING (LIST)),
+  "sort LIST-O-LISTS, a list of lists, each of the form (STRING (LIST)),
 lexicographically by the car of each element, which is a string."
-       (sort list-o-lists
-             (lambda (a b) (string< (car a) (car b) ))))
+  (sort list-o-lists
+        (lambda (a b) (string< (car a) (car b) ))))
 
 (defun apigee--get-target-template-filename (template-filename)
   "return the fullpath name of the target template file.
