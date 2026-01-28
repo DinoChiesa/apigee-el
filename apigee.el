@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-November-15 17:19:57>
+;; Last-saved : <2026-January-28 11:00:52>
 ;;
 ;;; Commentary:
 ;;
@@ -115,7 +115,7 @@ the prerequisites via `pip install -r requirements.txt`")
   '(
     (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
     (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
-    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t ; %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
+    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t %c %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
     (lint .  "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
     (validate .  "%validate-cmd --source .")
     ))
@@ -128,7 +128,7 @@ the prerequisites via `pip install -r requirements.txt`")
   '(
     (gcloud . "gcloud")
     (apigeecli . "apigeecli")
-    (apigeelint . "node ~/path/to/apigeelint/cli.js")
+    (apigeelint . ("node" "~/path/to/apigeelint/cli.js"))
     (validate-cmd . apigee--get-xmlschema-validator-program)
     )
   "apigee.el will use `executable-find' to locate the programs on the path. If
@@ -145,6 +145,7 @@ via, for example,
 
 (defvar apigee-placeholders-alist
   `(
+    (c               . apigee--concatenate-command-string)
     (n               . apigee--proxy-name)
     (o               . apigee-get-organization)
     (e               . apigee-get-environment )
@@ -152,6 +153,7 @@ via, for example,
     (sa_args         . apigee-get-service-account-args-for-deployment )
     (t               . apigee--memoized-gcloud-pat)
     )
+  "functions that return values to be used as placeholders in commands"
   )
 
 ;; useful during development
@@ -939,6 +941,14 @@ expects it."
 
 (setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
 
+(defun apigee--concatenate-command-string (&rest ignored)
+  "Return the string that concatenates commands. On Linux this is
+semicolon (;), on Windows, double ampersand (&&)."
+  (cond
+   ((eq system-type 'windows-nt) "&&")
+   (t ";")))
+
+
 (defun apigee--get-xmlschema-validator-program ()
   "Resolves the command for the XML Schema validator program.
 It constructs the path to the Python executable within the virtual
@@ -1000,28 +1010,24 @@ than a lambda to avoid edebug issues."
               acc)
           acc)))))
 
-(defun apigee--resolve-program (pgm-str-or-fn)
-  "Resolve the program. PGM-STR-OR-FN is either a string or a function.
+(defun apigee--resolve-program (pgm-arg)
+  "Resolve the program. PGM-ARG is either a funciton, a list, or a string.
 If a function, then invoke it and take the string value of
-that. Otherwise use PGM-STR-OR-FN as the resulting string.
-
-If the resulting string contains spaces (e.g., 'node script.js'), split
-the string, resolve the executable path for the first element using
-`executable-find`, and then re-assemble the command and return
-it. Otherwise, use `executable-find` directly on the resulting string."
-  (let ((pgm
-         (if (functionp pgm-str-or-fn)
-             (funcall pgm-str-or-fn)
-           pgm-str-or-fn)))
-    (if (s-contains? " " pgm)
-        (let* ((parts (s-split " " pgm t))
-               (executable (car parts))
-               (resolved-executable (executable-find executable)))
-          (if resolved-executable
-              (s-join " " (cons resolved-executable (cdr parts)))
-            ;; If executable-find fails for the first part, the program cannot be resolved
-            nil))
-      (executable-find pgm))))
+that. If a list, resolve the first arg as an executable and then concatenate
+that with the remaining args. Otherwise resolve PGM-ARG as an executable."
+  (cond
+   ((functionp pgm-arg)
+    (funcall pgm-arg))
+   ((listp pgm-arg)
+    (let* ((executable (car pgm-arg))
+           (resolved-executable (executable-find executable)))
+      (when resolved-executable
+        (s-join " " (cons resolved-executable (cdr pgm-arg))))))
+   (t
+    (if (file-name-directory pgm-arg)
+        (when (and (file-exists-p pgm-arg) (file-executable-p pgm-arg))
+          pgm-arg)
+      (executable-find pgm-arg)))))
 
 (defun apigee--replace-program (acc item)
   "Helper for seq-reduce. Replaces placeholders in ACC with resolved program paths.
