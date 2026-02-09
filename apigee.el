@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2025-November-15 17:19:57>
+;; Last-saved : <2026-February-09 12:07:00>
 ;;
 ;;; Commentary:
 ;;
@@ -1099,69 +1099,71 @@ Returns nil if no such item is found."
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy."
-  (let ((bundle-dir (apigee--root-path-of-bundle))
-        (proxy-name (apigee--proxy-name))
-        (cmd (apigee--get-command command-symbol want-prompt)))
-    (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " proxy-name "*")))
-          (remote-host
-           (save-match-data ; is usually a good idea
-             (and
-              (string-match "^/ssh:\\([^:]+\\):" bundle-dir)
-              (match-string 1 bundle-dir))))
-          highlight-regexp)
-      (when cmd
-        (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
-        (let ((default-directory (expand-file-name bundle-dir))
-              ;;(process-environment '("PATH=foobar"))
-              )
-          ;; Chapter 1. trying to get compilation-start over Tramp to use bash
-          (when remote-host
-            (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
-                   (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
-                   (item
-                    (dc-find-item-in-list-of-lists tramp-connection-properties safe-ssh-spec-pattern)))
-              (if (not item)
-                  (add-to-list 'tramp-connection-properties
-                               (list safe-ssh-spec-pattern
-                                     "remote-shell" "/bin/bash")))))
-          ;; 20250301-0426
-          ;;
-          ;; If I use nil here for mode (later: mode?), I cannot mask the token, and the output
-          ;; is not displayed very quickly. If I use t, then the code can mask
-          ;; the token, and the output gets displayed much more quickly. The
-          ;; experience is better.  The one downside: the compilation is shown in
-          ;; comint mode, which I theoretically don't want - it's not
-          ;; interactive. But I don't care that much.
-          (with-connection-local-variables
-           (let (
-                 ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
-                 ;; Not sure which, if any, are required here.
-                 (compilation-shell-name  "/bin/bash")
-                 (tramp-default-remote-shell "/bin/bash")
-                 (tramp-encoding-shell "/bin/bash"))
-             (let* ((actual-command-to-run
-                     ;; If a prefix was used, prompt the user to edit the command.
-                     ;; But mask the token during editing.
-                     (if want-prompt
-                         (let* ((command-with-token-masked (apigee--mask-token cmd))
-                                (confirmed-command-to-run
-                                 (read-shell-command "Run build command: " command-with-token-masked)))
-                           (apigee--reinsert-token confirmed-command-to-run))
-                       cmd))
-                    (buf
-                     (compilation-start
-                      ;; 20251115-1240
-                      ;; it seems comint sets a default-directory without the need for cd.
-                      ;;(concat "cd " bundle-dir "; " actual-command-to-run)
-                      actual-command-to-run
-                      t name-function highlight-regexp)))
-               (with-current-buffer buf
-                 ;; obscure any token that appears
-                 (save-excursion
-                   (beginning-of-buffer)
-                   (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-                     (replace-match "--token ***masked***")))
-                 (setq buffer-read-only t))))))))))
+  (if-let* ((bundle-dir (apigee--root-path-of-bundle)))
+      (if-let* ((proxy-name (apigee--proxy-name))
+                (cmd (apigee--get-command command-symbol want-prompt)))
+          (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " proxy-name "*")))
+                (remote-host
+                 (save-match-data ; is usually a good idea
+                   (and
+                    (string-match "^/ssh:\\([^:]+\\):" bundle-dir)
+                    (match-string 1 bundle-dir))))
+                highlight-regexp)
+            (when cmd
+              (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
+              (let ((default-directory (expand-file-name bundle-dir))
+                    ;;(process-environment '("PATH=foobar"))
+                    )
+                ;; Chapter 1. trying to get compilation-start over Tramp to use bash
+                (when remote-host
+                  (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
+                         (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
+                         (item
+                          (dc-find-item-in-list-of-lists tramp-connection-properties safe-ssh-spec-pattern)))
+                    (if (not item)
+                        (add-to-list 'tramp-connection-properties
+                                     (list safe-ssh-spec-pattern
+                                           "remote-shell" "/bin/bash")))))
+                ;; 20250301-0426
+                ;;
+                ;; If I use nil here for mode (later: mode?), I cannot mask the token, and the output
+                ;; is not displayed very quickly. If I use t, then the code can mask
+                ;; the token, and the output gets displayed much more quickly. The
+                ;; experience is better.  The one downside: the compilation is shown in
+                ;; comint mode, which I theoretically don't want - it's not
+                ;; interactive. But I don't care that much.
+                (with-connection-local-variables
+                 (let (
+                       ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
+                       ;; Not sure which, if any, are required here.
+                       (compilation-shell-name  "/bin/bash")
+                       (tramp-default-remote-shell "/bin/bash")
+                       (tramp-encoding-shell "/bin/bash"))
+                   (let* ((actual-command-to-run
+                           ;; If a prefix was used, prompt the user to edit the command.
+                           ;; But mask the token during editing.
+                           (if want-prompt
+                               (let* ((command-with-token-masked (apigee--mask-token cmd))
+                                      (confirmed-command-to-run
+                                       (read-shell-command "Run build command: " command-with-token-masked)))
+                                 (apigee--reinsert-token confirmed-command-to-run))
+                             cmd))
+                          (buf
+                           (compilation-start
+                            ;; 20251115-1240
+                            ;; it seems comint sets a default-directory without the need for cd.
+                            ;;(concat "cd " bundle-dir "; " actual-command-to-run)
+                            actual-command-to-run
+                            t name-function highlight-regexp)))
+                     (with-current-buffer buf
+                       ;; obscure any token that appears
+                       (save-excursion
+                         (beginning-of-buffer)
+                         (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
+                           (replace-match "--token ***masked***")))
+                       (setq buffer-read-only t))))))))
+        (error "Can't find proxy name, or can't resolve command."))
+    (error "You do not appear to be in an API Proxy directory.")))
 
 
 ;; (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)
@@ -1655,6 +1657,24 @@ is visiting a policy file. otherwise nil."
           (copy-directory source-subdir dest-subdir t nil)))
     (setq subdirs (cdr subdirs))))
 
+(defun apigee--clean-files-from-dirtree (directory filespecs)
+  "Recursively delete files in DIRECTORY matching any pattern in FILESPECS.
+DIRECTORY should be a string path.
+FILESPECS should be a list of strings (e.g., '(\"*.xml\" \"*.js\"))."
+  (interactive "DDirectory: \nxFilespecs (list of strings): ")
+  (let ((delete-count 0))
+    (dolist (spec filespecs)
+      ;; Convert glob pattern (e.g. *.js) to a regex (e.g. \.js$)
+      (let ((regexp (wildcard-to-regexp spec))
+            (files (directory-files-recursively directory "")))
+        (dolist (file files)
+          ;; Check if the base name of the file matches the regex
+          (when (string-match-p regexp (file-name-nondirectory file))
+            (delete-file file)
+            (setq delete-count (1+ delete-count))))))
+    ;;(message "Cleanup complete. Total files removed: %d" delete-count)
+    ))
+
 (defun apigee--copy-proxy-template-files (proxy-name source destination)
   "copy files from the SOURCE template directory to the DESTINATION directory,
 changing names and replacing / expanding things as appropriate."
@@ -1680,6 +1700,8 @@ changing names and replacing / expanding things as appropriate."
           (save-buffer))))
 
     (apigee--copy-subdirs (list "proxies" "policies" "resources" "targets") source-apiproxy-dir dest-apiproxy-dir)
+    ;; in the destination, remove any emacs-generated temporary files (backups and # files)
+    (apigee--clean-files-from-dirtree dest-apiproxy-dir '("#*.*#" "*.*~"))
 
     ;; if we can find a single XML file in the proxies dir, modify it
     (let* ((dest-proxyendpoints-dir (apigee--join-path-elements dest-apiproxy-dir "proxies"))
