@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2026-February-09 12:07:00>
+;; Last-saved : <2026-February-19 16:43:02>
 ;;
 ;;; Commentary:
 ;;
@@ -51,7 +51,7 @@
 ;;
 ;;; License
 ;;
-;;    Copyright 2017-2025 Google LLC.
+;;    Copyright © 2017-2026 Google LLC.
 ;;
 ;;    Licensed under the Apache License, Version 2.0 (the "License");
 ;;    you may not use this file except in compliance with the License.
@@ -370,29 +370,33 @@ It is expected that this function will be called periodically."
       (let ((print-length nil)) ;; to avoid truncating
         (pp alist-to-write (current-buffer))))))
 
+;; (defun apigee--join-path-elements (root &rest dirs)
+;;   "Joins a series of directories together, inserting slashes as necessary,
+;; like Python's os.path.join. TODO: figure out why I should not just use
+;; `file-name-concat'"
+;;   (if (not dirs)
+;;       root
+;;     (apply 'apigee--join-path-elements
+;;            (let ((first (car dirs)))
+;;              (if (s-suffix? "/" root)
+;;                  (concat root
+;;                          (if (s-prefix? "/" first)
+;;                              (substring first 1 (length first))
+;;                            first))
+;;                (if (s-prefix? "/" first)
+;;                    (concat root first)
+;;                  (concat root "/" (car dirs)))))
+;;            (cdr dirs))))
+
 (defun apigee--join-path-elements (root &rest dirs)
-  "Joins a series of directories together, inserting slashes as necessary,
-like Python's os.path.join. TODO: figure out why I should not just use
-`file-name-concat'"
-  (if (not dirs)
-      root
-    (apply 'apigee--join-path-elements
-           (let ((first (car dirs)))
-             (if (s-suffix? "/" root)
-                 (concat root
-                         (if (s-prefix? "/" first)
-                             (substring first 1 (length first))
-                           first))
-               (if (s-prefix? "/" first)
-                   (concat root first)
-                 (concat root "/" (car dirs)))))
-           (cdr dirs))))
+  "Joins a series of directories together, starting at the root, inserting
+slashes as necessary, as with Python's os.path.join."
+  (apply #'file-name-concat root dirs))
 
 (defun apigee--insure-trailing-slash (path)
   "Insure the given path ends with a slash. This is usedful with
 `default-directory'. Setting `default-directory' to a value that
-does not end with a slash causes it to use the parent directory.
-"
+does not end with a slash causes it to use the parent directory."
   (and path
        (if (s-ends-with? "/" path) path (concat path "/"))))
 
@@ -463,7 +467,8 @@ is used to populate the menu of available policy templates."
                  apigee--policy-template-alist)))
 
 (defun apigee--load-asset-templates (sym label subdir)
-  "Load templates for a kind of asset from the template dir, then set the symbol to the alist."
+  "Load templates for a kind of asset from the template dir,
+then set the symbol to the alist."
   (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir subdir )))
     (set sym
          (let (template-list)
@@ -942,8 +947,8 @@ expects it."
 (defun apigee--get-xmlschema-validator-program ()
   "Resolves the command for the XML Schema validator program.
 It constructs the path to the Python executable within the virtual
-environment and the 'validateBundle.py' script, relative to
-'apigee-xmlschema-validator-home'."
+environment and the ='validateBundle.py'= script, relative to
+='apigee-xmlschema-validator-home'=."
   (if-let* ((apigee-el-dir (file-name-directory apigee--load-file-name))
             (base-dir (if (file-name-absolute-p apigee-xmlschema-validator-home)
                           apigee-xmlschema-validator-home
