@@ -13,7 +13,7 @@
 ;; Requires   : s.el, xml.el
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
-;; Last-saved : <2026-February-19 16:45:41>
+;; Last-saved : <2026-February-22 18:28:01>
 ;;
 ;;; Commentary:
 ;;
@@ -928,7 +928,8 @@ expects it."
   "Memoize a function with a timeout.
 
   FUNCTION is the function to memoize.
-  TIMEOUT-IN-SECONDS is the cache expiration time in seconds (default: 600 seconds - 10 minutes).
+  TIMEOUT-IN-SECONDS is the cache expiration time in seconds (default:
+600 seconds - 10 minutes).
 
   Returns a memoized function."
   (let ((timeout (or timeout-in-seconds (* 10 60)))  ; Default to 10 minutes
@@ -1028,11 +1029,17 @@ that with the remaining args. Otherwise resolve PGM-ARG as an executable."
            (resolved-executable (executable-find executable)))
       (when resolved-executable
         (s-join " " (cons resolved-executable (cdr pgm-arg))))))
+
    (t
-    (if (file-name-directory pgm-arg)
-        (when (and (file-exists-p pgm-arg) (file-executable-p pgm-arg))
-          pgm-arg)
-      (executable-find pgm-arg)))))
+    (if-let* ((all-args (split-string pgm-arg " ")) ;; in case there is a space
+              (first-arg (nth 0 all-args)))
+        (if (and (file-name-directory first-arg)
+                 (file-exists-p first-arg) (file-executable-p first-arg))
+            pgm-arg ;; no need to resolve anything
+          (mapconcat 'identity (cons (executable-find first-arg) (cdr all-args)) " "))
+      (error (format "cannot resolve program '%s'" pgm-arg))))))
+
+
 
 (defun apigee--replace-program (acc item)
   "Helper for seq-reduce. Replaces placeholders in ACC with resolved program paths.
@@ -1046,12 +1053,13 @@ called, returns the program name/path string."
         (progn
           (let ((resolved-pgm (apigee--resolve-program program-val)))
             (if (not resolved-pgm)
-                (error (format "cannot resolve program '%s'" command-str)))
+                (error (format "cannot resolve program '%s'" program-val)))
             (replace-regexp-in-string replaceable resolved-pgm acc)))
       acc)))
 
 (defun apigee--get-command (symbol want-prompt)
-  "get the command to run (eg apigeelint, apigeecli, etc) for the current API proxy."
+  "get the command to run (eg apigeelint, apigeecli, etc) for the
+current API proxy."
   (let ((cmd (alist-get symbol apigee-commands-alist)))
     (when cmd
       (setq cmd
