@@ -122,12 +122,21 @@ the prerequisites via `pip install -r requirements.txt`")
 
 (defvar apigee-commands-alist
   '(
-    (import . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t")
-    (deploy . "%apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
-    (import-and-deploy . "%apigeecli apis create bundle -f apiproxy --name %n -o %o --token %t %c %apigeecli apis deploy --wait --name %n --ovr --org %o --env %e %sa_args --token %t")
-    (lint .  "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
-    (validate .  "%validate-cmd --source .")
-    ))
+    (import . ("%apigeecli" "apis" "create" "bundle" "-f" "apiproxy" "--name" "%n" "-o" "%o" "--token" "%t"))
+    (deploy . ("%apigeecli" "apis" "deploy" "--wait" "--name" "%n" "--ovr" "--org" "%o" "--env" "%e" "%sa_args" "--token" "%t"))
+    (import-and-deploy . (import deploy))
+    (lint . ("%apigeelint" "-s" "." "-e" "%lint-exclusions" "-f" "visualstudio.js"))
+    (validate . ("%validate-cmd" "--source" "."))
+    )
+  "The commands run by `apigee-lint-asset', `apigee-import-proxy' and so on.
+Each value is one of:
+- a list of words. A word is either literal, or %KEY where KEY is in
+  `apigee-programs-alist' or `apigee-placeholders-alist'; such a word
+  expands to zero or more words. Every word is shell-quoted.
+- a list of command symbols, run in sequence with \"&&\", so a failure
+  stops the rest.
+- a string: a shell command line used as-is, except that %KEY is
+  replaced with its (shell-quoted) expansion and %c with \"&&\".")
 
 ;; To modify one of the above after program starts:
 ;; (setf (alist-get 'lint apigee-commands-alist)
@@ -140,9 +149,13 @@ the prerequisites via `pip install -r requirements.txt`")
     (apigeelint . ("node" "~/path/to/apigeelint/cli.js"))
     (validate-cmd . apigee--get-xmlschema-validator-program)
     )
-  "apigee.el will use `executable-find' to locate the programs on the path. If
-you want to avoid that, you can set the path explicitly in your emacs init file,
-via, for example,
+  "Programs used in `apigee-commands-alist', as %KEY.
+Each value is a string, a list, or a function returning one of those. A
+string is a program name or path (spaces in the path are fine), or a
+program followed by arguments separated by spaces. A list is a program
+and its arguments. A program without a directory is looked up with
+`executable-find'. You can set the path explicitly in your emacs init
+file, for example,
   (setf (alist-get 'apigeecli apigee-programs-alist) \"~/.apigeecli/bin/apigeecli\"
         (alist-get 'gcloud apigee-programs-alist) \"~/gcloud-sdk/bin/gcloud\"
     )"
@@ -154,15 +167,17 @@ via, for example,
 
 (defvar apigee-placeholders-alist
   `(
-    (c               . apigee--concatenate-command-string)
     (n               . apigee--bundle-name)
     (o               . apigee-get-organization)
     (e               . apigee-get-environment )
     (lint-exclusions . apigee-get-lint-exclusions )
     (sa_args         . apigee-get-service-account-args-for-deployment )
-    (t               . apigee--memoized-gcloud-pat)
+    (t               . apigee--gcloud-access-token)
     )
-  "functions that return values to be used as placeholders in commands"
+  "Placeholders used in `apigee-commands-alist', as %KEY.
+Each value is a function called with WANT-PROMPT. It returns a string
+(one word), a list of strings, or nil or \"\" (no words). The token, %t,
+is filled in last, after the user has had a chance to edit the command."
   )
 
 ;; useful during development
@@ -847,7 +862,7 @@ hybrid, where the organization is named after its GCP project.
 Enter \"-\" to deploy without a service account. That choice is stored
 like any other value, so it is not asked again.
 
-Returns \"--sa EMAIL\", or the empty string for no service account."
+Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
   (interactive "P")
   (let ((sa-local
          (if (or want-prompt (not apigee-service-account))
@@ -859,9 +874,8 @@ Returns \"--sa EMAIL\", or the empty string for no service account."
       ;; user provided short form; append the boilerplate suffix.
       (setq sa-local (format "%s@%s.iam.gserviceaccount.com" sa-local (apigee-get-organization) )))
     (setq apigee-service-account sa-local) ;; for next time, and for persistence
-    (if (funcall no-sa-p sa-local)
-        ""
-      (format "--sa %s" sa-local))))
+    (unless (funcall no-sa-p sa-local)
+      (list "--sa" sa-local))))
 
 (defun apigee--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
@@ -1139,19 +1153,13 @@ Uses a counter, so the name is unused in POLICIES-DIR.
                 pname (funcall next-name val)))
         pname))))
 
-(defun apigee-gcloud-auth-print-access-token (&rest ignored)
-  "return output of $(gcloud auth print-access-token) .
-It accepts an arg because the logic in `apigee--replace-placeholder'
-expects it."
-  (let* ((gcloud-pgm
-          (alist-get 'gcloud apigee-programs-alist))
-         (resolved-pgm (apigee--resolve-program gcloud-pgm)))
-    (if (not resolved-pgm)
-        (error "cannot resolve %s" gcloud-pgm))
-    (let* ((command-string (concat resolved-pgm " auth print-access-token"))
-           (output (replace-regexp-in-string "\n$" "" (shell-command-to-string command-string)))
-           (lines (split-string output "\n")))
-      (car (last lines)))))
+(defun apigee-gcloud-auth-print-access-token (&rest _)
+  "Return the output of gcloud auth print-access-token."
+  (let* ((gcloud-pgm (alist-get 'gcloud apigee-programs-alist))
+         (words (or (apigee--resolve-program gcloud-pgm)
+                    (error "cannot resolve %s" gcloud-pgm))))
+    (car (last (apply #'process-lines (car words)
+                      (append (cdr words) '("auth" "print-access-token")))))))
 
 (defun apigee--memoize-with-timeout (fn &optional timeout-in-seconds)
   "Memoize a function with a timeout.
@@ -1176,12 +1184,10 @@ expects it."
 
 (setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
 
-(defun apigee--concatenate-command-string (&rest ignored)
-  "Return the string that joins two commands, running the second only if
-the first succeeds. Double ampersand (&&) does that in both POSIX shells
-and Windows cmd, so import-and-deploy does not deploy after a failed
-import."
-  "&&")
+(defun apigee--gcloud-access-token (&rest _)
+  "Return a gcloud access token, cached for a minute.
+The %t placeholder in `apigee-placeholders-alist'."
+  (funcall apigee--memoized-gcloud-pat))
 
 
 (defun apigee--get-xmlschema-validator-program ()
@@ -1210,15 +1216,15 @@ environment and the ='validateBundle.py'= script, relative to
                (t "python"))) ; Fallback or other systems
              (python-path (apigee--join-path-elements full-venv-dir python-executable-suffix)))
         (if (file-exists-p python-path)
-            (format "%s %s" python-path validate-script)
+            (list python-path validate-script)
           (error "Python executable not found at %s" python-path)))
     (error "Could not resolve XML Schema validator program. Check 'apigee-xmlschema-validator-home'")))
 
 (defun apigee--bundle-name (&rest _)
   "Return the short name of the current API proxy or sharedflow.
 The name comes from the single top-level XML file in the bundle
-directory. It accepts arguments because `apigee--replace-placeholder'
-passes one."
+directory. It accepts arguments because placeholder functions are
+called with WANT-PROMPT."
   (when-let* ((bundle (apigee--bundle)))
     (let* ((bundle-dir (apigee--bundle-subdir bundle))
            (file-list (apigee--proper-files bundle-dir ".xml"))
@@ -1241,28 +1247,8 @@ start of %token."
    (concat "\\(%" (regexp-quote (symbol-name key)) "\\)\\(?:[^[:alnum:]_-]\\|\\'\\)")
    value template t t 1))
 
-(defun apigee--replace-placeholder (want-prompt)
-  "used in seq-reduce. I defined this in a formal fn rather
-than a lambda to avoid edebug issues."
-  (let ((want-prompt want-prompt))
-    (lambda (acc item)
-      (let* ((key (car item))
-             (replaceable (concat "%" (symbol-name key))))
-        (if (s-contains? replaceable acc)
-            (if-let*
-                ((replacer-fn (cdr item))
-                 (callable-fn ;; the cdr is either a defun or a variable
-                  (cond ((fboundp replacer-fn) replacer-fn)
-                        ((and (boundp replacer-fn) (functionp (symbol-value replacer-fn)))
-                         (symbol-value replacer-fn))
-                        (t nil)))
-                 (replacement (funcall callable-fn want-prompt)))
-                (apigee--substitute-placeholder key replacement acc)
-              acc)
-          acc)))))
-
 (defun apigee--find-executable (name)
-  "Return the executable NAME as a shell-quoted absolute path, or nil.
+  "Return the executable NAME as an absolute path, or nil.
 A NAME with a directory part is checked directly; otherwise it is looked
 up with `executable-find'."
   (when-let* ((path (if (file-name-directory name)
@@ -1271,58 +1257,104 @@ up with `executable-find'."
                                (not (file-directory-p expanded))
                                expanded))
                       (executable-find name))))
-    (shell-quote-argument path)))
+    path))
 
 (defun apigee--resolve-program (pgm-arg)
-  "Resolve the program. PGM-ARG is either a function, a list, or a string.
-If a function, then invoke it and take the string value of
-that. If a list, resolve the first arg as an executable and then concatenate
-that with the remaining args. If a string, resolve it as an executable; a
-path with spaces works. Failing that, treat the first word as the
-executable and the rest as arguments. Return nil if the executable can't
-be found."
-  (cond
-   ((functionp pgm-arg)
-    (funcall pgm-arg))
-   ((consp pgm-arg)
-    (when-let* ((executable (apigee--find-executable (car pgm-arg))))
-      (string-join (cons executable (cdr pgm-arg)) " ")))
-   ((stringp pgm-arg)
-    (or (apigee--find-executable pgm-arg)
-        (let ((words (split-string pgm-arg " " t)))
-          (when-let* ((executable (and words (apigee--find-executable (car words)))))
-            (string-join (cons executable (cdr words)) " ")))))))
+  "Return the words that run PGM-ARG, or nil if its executable isn't found.
+PGM-ARG is a value from `apigee-programs-alist': a function returning a
+program, a list (PROGRAM ARGS...), or a string. A string is first tried
+whole as an executable, so a path with spaces works; failing that, its
+first word is the executable and the rest are arguments. The executable
+becomes an absolute path, and arguments starting with ~ are expanded."
+  (let ((with-args (lambda (program args)
+                     (when-let* ((executable (and program (apigee--find-executable program))))
+                       (cons executable
+                             (mapcar (lambda (arg) (if (string-prefix-p "~" arg) (expand-file-name arg) arg))
+                                     args))))))
+    (cond
+     ((functionp pgm-arg)
+      (apigee--resolve-program (funcall pgm-arg)))
+     ((consp pgm-arg)
+      (funcall with-args (car pgm-arg) (cdr pgm-arg)))
+     ((stringp pgm-arg)
+      (or (funcall with-args pgm-arg nil)
+          (let ((words (split-string pgm-arg " " t)))
+            (funcall with-args (car words) (cdr words))))))))
 
+(defun apigee--expand-word (word want-prompt)
+  "Return the list of words that WORD expands to.
+A word %KEY expands through `apigee-programs-alist' or
+`apigee-placeholders-alist'; any other word stands for itself."
+  (let ((key (and (string-prefix-p "%" word) (intern (substring word 1)))))
+    (cond
+     ((and key (assq key apigee-programs-alist))
+      (let ((program (alist-get key apigee-programs-alist)))
+        (or (apigee--resolve-program program)
+            (error "cannot resolve program '%s'" program))))
+     ((and key (assq key apigee-placeholders-alist))
+      (let ((value (funcall (alist-get key apigee-placeholders-alist) want-prompt)))
+        (cond ((stringp value) (and (not (string-empty-p value)) (list value)))
+              (t value))))
+     (t (list word)))))
 
+(defun apigee--words-to-shell (words)
+  "Join WORDS into a shell command line, quoting each word.
+The keywords :and and :token stand for \"&&\" and the unexpanded %t."
+  (mapconcat (lambda (word)
+               (pcase word
+                 (:and "&&")
+                 (:token "%t")
+                 (_ (shell-quote-argument word))))
+             words " "))
 
-(defun apigee--replace-program (acc item)
-  "Helper for seq-reduce. Replaces placeholders in ACC with resolved program paths.
-ITEM is a cons cell from `apigee-programs-alist` (KEY . VALUE).  VALUE
-can be a string (the program name/path) or a function symbol that, when
-called, returns the program name/path string."
-  (let* ((key (car item))
-         (program-val (cdr item)) ; Can be a string or a function symbol
-         (replaceable (concat "%" (symbol-name key))))
-    (if (s-contains? replaceable acc)
-        (progn
-          (let ((resolved-pgm (apigee--resolve-program program-val)))
-            (if (not resolved-pgm)
-                (error "cannot resolve program '%s'" program-val))
-            (apigee--substitute-placeholder key resolved-pgm acc)))
-      acc)))
+(defun apigee--command-words (words want-prompt defer-token)
+  "Expand the placeholders in the command template WORDS.
+With DEFER-TOKEN, leave the token placeholder %t unexpanded, as :token."
+  (mapcan (lambda (word)
+            (cond ((member word '("&&" "%c")) (list :and))
+                  ((and defer-token (equal word "%t")) (list :token))
+                  (t (copy-sequence (apigee--expand-word word want-prompt)))))
+          words))
 
-(defun apigee--get-command (symbol want-prompt)
-  "get the command to run (eg apigeelint, apigeecli, etc) for the
-current API proxy."
-  (let ((cmd (alist-get symbol apigee-commands-alist)))
-    (when cmd
-      (setq cmd
-            (seq-reduce #'apigee--replace-program apigee-programs-alist cmd))
-      ;; I had trouble using this seq-reduce, when using edebug-defun.
-      ;; But in my experience, when NOT using the debugger, it works as intended.
-      ;; Womp womp.
-      (let ((replacer (apigee--replace-placeholder want-prompt)))
-        (seq-reduce replacer apigee-placeholders-alist cmd)))))
+(defun apigee--expand-command-string (template want-prompt defer-token)
+  "Expand the %KEY placeholders in the shell command line TEMPLATE.
+Each expansion is shell-quoted; %c becomes \"&&\". With DEFER-TOKEN,
+%t is left as it is."
+  (let ((command template))
+    (dolist (key (append (mapcar #'car apigee-programs-alist)
+                         (mapcar #'car apigee-placeholders-alist)))
+      (when (and (not (and defer-token (eq key 't)))
+                 (string-match-p (concat "%" (regexp-quote (symbol-name key))
+                                         "\\(?:[^[:alnum:]_-]\\|\\'\\)")
+                                 command))
+        (setq command (apigee--substitute-placeholder
+                       key
+                       (apigee--words-to-shell
+                        (apigee--expand-word (concat "%" (symbol-name key)) want-prompt))
+                       command))))
+    (apigee--substitute-placeholder 'c "&&" command)))
+
+(defun apigee--get-command (symbol want-prompt &optional defer-token)
+  "Return the shell command line for SYMBOL in `apigee-commands-alist'.
+WANT-PROMPT is passed to the placeholder functions. With DEFER-TOKEN,
+the token placeholder %t is left in the result, for
+`apigee--insert-token' to fill in later."
+  (let ((template (alist-get symbol apigee-commands-alist)))
+    (cond
+     ((null template) nil)
+     ((stringp template)
+      (apigee--expand-command-string template want-prompt defer-token))
+     ((symbolp (car template))
+      (mapconcat (lambda (command) (apigee--get-command command want-prompt defer-token))
+                 template " && "))
+     (t
+      (apigee--words-to-shell (apigee--command-words template want-prompt defer-token))))))
+
+(defun apigee--insert-token (command)
+  "Replace the token placeholder %t in COMMAND with a gcloud access token."
+  (if (string-match-p "%t\\(?:[^[:alnum:]_-]\\|\\'\\)" command)
+      (apigee--substitute-placeholder 't (shell-quote-argument (apigee--gcloud-access-token)) command)
+    command))
 
 (defconst apigee--token-arg-regexp "--token \\([^ \n]+\\)"
   "Matches a --token argument and its value.")
@@ -1357,21 +1389,6 @@ is masked too."
 (put 'apigee--mask-secrets 'permanent-local-hook t)
 (put 'apigee--mask-command-echo 'permanent-local-hook t)
 
-(defun apigee--mask-token (unmasked-cmd)
-  "Masks tokens in a command. See also
- `apigee--reinsert-token'"
-  (replace-regexp-in-string apigee--token-arg-regexp apigee--masked-token-arg unmasked-cmd t t))
-
-(defun apigee--reinsert-token (masked-cmd)
-  "Re-inserts tokens into a masked command. See also
- `apigee--mask-token'"
-  (let ((callable-fn
-         (symbol-value 'apigee--memoized-gcloud-pat)))
-    (replace-regexp-in-string (regexp-quote apigee--masked-token-arg)
-                              (concat "--token " (funcall callable-fn nil))
-                              masked-cmd t t)))
-
-
 (defun apigee--has-same-bundle-root (root-dir-in-question)
   "predicate called in each unsaved buffer.  Returns t if the buffer
 is part of an apiproxy, and if the ROOT-DIR-IN-QUESTION is the same
@@ -1394,7 +1411,9 @@ Returns nil if no such item is found."
   "Run a command for the current API proxy or sharedflow."
   (if-let* ((bundle-dir (plist-get (apigee--bundle) :root)))
       (if-let* ((bundle-name (apigee--bundle-name))
-                (cmd (apigee--get-command command-symbol want-prompt)))
+                ;; When the user will edit the command, the token is filled in
+                ;; afterwards, so it never appears in the minibuffer.
+                (cmd (apigee--get-command command-symbol want-prompt want-prompt)))
           (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " bundle-name "*")))
                 (remote-host
                  (save-match-data ; is usually a good idea
@@ -1433,12 +1452,10 @@ Returns nil if no such item is found."
                        (tramp-encoding-shell "/bin/bash"))
                    (let* ((actual-command-to-run
                            ;; If a prefix was used, prompt the user to edit the command.
-                           ;; But mask the token during editing.
+                           ;; The token is still the placeholder %t at this point.
                            (if want-prompt
-                               (let* ((command-with-token-masked (apigee--mask-token cmd))
-                                      (confirmed-command-to-run
-                                       (read-shell-command "Run build command: " command-with-token-masked)))
-                                 (apigee--reinsert-token confirmed-command-to-run))
+                               (apigee--insert-token
+                                (read-shell-command "Run build command: " cmd))
                              cmd))
                           (buf
                            (compilation-start

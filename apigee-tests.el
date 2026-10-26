@@ -346,10 +346,11 @@ Return the parsed ProxyEndpoint element afterwards."
       (set-file-modes prog #o755)
       (should-not (apigee--resolve-program "no-such-prog-xyz --flag"))
       (should-not (apigee--resolve-program '("no-such-prog-xyz" "a")))
-      (should (equal (string-trim (shell-command-to-string (apigee--resolve-program prog)))
-                     "hi"))
+      (should (equal (apigee--resolve-program prog) (list prog)))
       (should (equal (apigee--resolve-program "sh -c true")
-                     (concat (shell-quote-argument (executable-find "sh")) " -c true"))))))
+                     (list (executable-find "sh") "-c" "true")))
+      (should (equal (apigee--resolve-program '("sh" "~/x.js"))
+                     (list (executable-find "sh") (expand-file-name "~/x.js")))))))
 
 (ert-deftest apigee-test-1.14-substitute-placeholder ()
   (should (equal (apigee--substitute-placeholder 't "C:\\Users\\me" "x --token %t y")
@@ -383,6 +384,66 @@ Return the parsed ProxyEndpoint element afterwards."
                   (should-not (string-match-p "SECRET123" (buffer-string)))))
             (kill-buffer buf)))
         (should-not (memq 'apigee--mask-secrets (default-value 'compilation-filter-hook)))))))
+
+;;; Command templating (2.4)
+
+(ert-deftest apigee-test-2.4a-placeholders-are-functions ()
+  (dolist (entry apigee-placeholders-alist)
+    (should (fboundp (cdr entry)))))
+
+(defun apigee-tests--args-printer (dir)
+  "Create, in a DIR subdirectory with a space, a script that prints its args."
+  (let ((prog (file-name-concat dir "dir with space" "show-args")))
+    (apigee-tests--write prog "#!/bin/sh\nfor a in \"$@\"; do echo \"[$a]\"; done\n")
+    (set-file-modes prog #o755)
+    prog))
+
+(ert-deftest apigee-test-2.4b-words-are-quoted ()
+  "A program path and arguments with spaces survive the shell."
+  (apigee-tests--with-temp-dir dir
+    (apigee-tests--with-command-env
+     (let ((default-directory (apigee-tests--new-asset "proxy" "p1" "loopback" dir))
+           (apigee-commands-alist '((show . ("%apigeecli" "two words" "%n" "%sa_args" "$HOME")))))
+       (setf (alist-get 'apigeecli apigee-programs-alist) (apigee-tests--args-printer dir))
+       (setq apigee-service-account "sa@p.iam.gserviceaccount.com")
+       (should (equal (shell-command-to-string (apigee--get-command 'show nil))
+                      "[two words]\n[p1]\n[--sa]\n[sa@p.iam.gserviceaccount.com]\n[$HOME]\n"))
+       (setq apigee-service-account "-")
+       (should (equal (shell-command-to-string (apigee--get-command 'show nil))
+                      "[two words]\n[p1]\n[$HOME]\n"))))))
+
+(ert-deftest apigee-test-2.4b-sequences-and-string-templates ()
+  (apigee-tests--with-temp-dir dir
+    (apigee-tests--with-command-env
+     (let ((default-directory (apigee-tests--new-asset "proxy" "p1" "loopback" dir))
+           (apigee-commands-alist '((a . ("echo" "A" "%n"))
+                                    (b . ("echo" "B" "%o"))
+                                    (both . (a b))
+                                    (legacy . "echo %n %c echo %o; echo done"))))
+       (should (equal (apigee--get-command 'both nil) "echo A p1 && echo B my-org"))
+       (should (equal (apigee--get-command 'legacy nil) "echo p1 && echo my-org; echo done"))
+       (should (equal (shell-command-to-string (apigee--get-command 'legacy nil))
+                      "p1\nmy-org\ndone\n"))))))
+
+(ert-deftest apigee-test-2.4c-token-filled-in-after-editing ()
+  "The prompt shows %t; the token is inserted only into the command that runs."
+  (apigee-tests--with-temp-dir dir
+    (apigee-tests--with-command-env
+     (let ((default-directory (apigee-tests--new-asset "proxy" "p1" "loopback" dir))
+           shown ran)
+       (should (string-match-p "--token %t\\'" (apigee--get-command 'import nil t)))
+       (should (string-match-p "--token TOK\\'" (apigee--get-command 'import nil)))
+       (cl-letf (((symbol-function 'read-shell-command)
+                  (lambda (_prompt initial &rest _) (setq shown initial) (concat initial " --extra")))
+                 ((symbol-function 'compilation-start)
+                  (lambda (command &rest _)
+                    (setq ran command)
+                    (get-buffer-create " *apigee-test-compilation*"))))
+         (apigee-tests--with-answers '("my-org")
+           (apigee-import-proxy t)))
+       (should (string-match-p "--token %t\\'" shown))
+       (should-not (let ((case-fold-search nil)) (string-match-p "TOK" shown)))
+       (should (string-match-p "--token TOK --extra\\'" ran))))))
 
 ;;; Guards and prompts (1.8 - 1.12, 1.26)
 
@@ -429,13 +490,13 @@ Return the parsed ProxyEndpoint element afterwards."
   (let ((apigee-service-account nil)
         (apigee-organization "my-org"))
     (apigee-tests--with-answers '("-" "-")
-      (should (equal (apigee-get-service-account-args-for-deployment) ""))
-      (should (equal (apigee-get-service-account-args-for-deployment) ""))
+      (should (null (apigee-get-service-account-args-for-deployment)))
+      (should (null (apigee-get-service-account-args-for-deployment)))
       (should (= (length apigee-tests--prompts) 1)))
     (should (equal apigee-service-account "-"))
     (setq apigee-service-account "deployer")
     (should (equal (apigee-get-service-account-args-for-deployment)
-                   "--sa deployer@my-org.iam.gserviceaccount.com"))))
+                   '("--sa" "deployer@my-org.iam.gserviceaccount.com")))))
 
 (ert-deftest apigee-test-1.26-new-asset-validates-input ()
   (should-not (commandp 'apigee--new-asset))
@@ -615,7 +676,7 @@ Return the parsed ProxyEndpoint element afterwards."
 
 ;;; Byte compilation (1.18, 2.9)
 
-(defconst apigee-tests--max-compile-warnings 10
+(defconst apigee-tests--max-compile-warnings 8
   "Byte-compiler warnings for apigee.el, as of the 2.1/2.2 commit.
 Lower this as review item 2.9 removes them; it should end at 0.")
 
