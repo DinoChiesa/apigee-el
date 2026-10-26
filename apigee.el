@@ -10,7 +10,7 @@
 ;; Modified   : May 2025
 ;; Version    : 1.3
 ;; Keywords   : apigee
-;; Package-Requires: ((emacs "28.1") (s "1.12.0") (dash "2.18.0") (yasnippet "0.14.0"))
+;; Package-Requires: ((emacs "28.1") (yasnippet "0.14.0"))
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
 ;; Last-saved : <2026-February-22 18:28:01>
@@ -67,12 +67,10 @@
 ;;
 ;;; TODO: see todo file
 
-(require 's) ;; magnars' long lost string library
 (require 'seq)
 (require 'xml)
 (require 'compile)
-(require 'dash) ;; magnars' functional lib, functions start with dash
-(require 'cl-lib) ; For assoc-if
+(require 'cl-lib) ; For cl-letf
 
 ;; Declared special so that `let' binds them dynamically even when this file
 ;; is byte-compiled, matching how they behave when it is loaded from source.
@@ -366,6 +364,41 @@ Each entry is (ASSET-TYPE . PLIST), with these properties:
              property))
 
 
+(defun apigee--blank-p (s)
+  "Return non-nil if S is nil or the empty string."
+  (or (null s) (string-empty-p s)))
+
+(defun apigee--capitalize-first (s)
+  "Return S with its first character upcased and the rest downcased."
+  (if (string-empty-p s)
+      s
+    (concat (upcase (substring s 0 1)) (downcase (substring s 1)))))
+
+(defun apigee--first-available-name (base available-p &optional start-at)
+  "Return the first of BASE, BASE-1, BASE-2, ... that AVAILABLE-P accepts.
+With START-AT, begin at BASE-START-AT instead of BASE."
+  (let* ((n start-at)
+         (name-for (lambda (n) (if n (format "%s-%d" base n) base))))
+    (while (not (funcall available-p (funcall name-for n)))
+      (setq n (1+ (or n 0))))
+    (funcall name-for n)))
+
+(defun apigee--read-unused-name (label default available-p)
+  "Read a name for a LABEL, offering DEFAULT, until AVAILABLE-P accepts it."
+  (let ((name (read-string (format "%s name: " (downcase label)) default nil default)))
+    (while (not (funcall available-p name))
+      (setq name (read-string (format "That name is in use. %s name: " label)
+                              default nil default)))
+    name))
+
+(defun apigee--get-or-prompt (sym label want-prompt)
+  "Return the value of SYM, prompting with LABEL if WANT-PROMPT or it is blank.
+The current value is offered as the default. The result is stored in SYM."
+  (let ((value (symbol-value sym)))
+    (set sym (if (or want-prompt (apigee--blank-p value))
+                 (apigee--read-or-default label value)
+               value))))
+
 (defun apigee--completion-table (candidates)
   "Return a completion table for CANDIDATES that lists them alphabetically.
 The default minibuffer sort puts short candidates first. The table's
@@ -552,12 +585,7 @@ Unlike a global redefinition, this affects only apigee's own XML calls."
 exclude from apigeelint. Uses a cached value, or, if WANT-PROMPT, will
 prompt the user."
   (interactive "P")
-  (let ((excl-local
-         (if want-prompt
-             (apigee--read-or-default "exclusions"
-                                      apigee-lint-exclusions)
-           apigee-lint-exclusions)))
-    (setq apigee-lint-exclusions excl-local)))
+  (apigee--get-or-prompt 'apigee-lint-exclusions "exclusions" want-prompt))
 
 
 (defun apigee--path-to-settings-file ()
@@ -637,7 +665,7 @@ slashes as necessary, as with Python's os.path.join."
 `default-directory'. Setting `default-directory' to a value that
 does not end with a slash causes it to use the parent directory."
   (and path
-       (if (s-ends-with? "/" path) path (concat path "/"))))
+       (if (string-suffix-p "/" path) path (concat path "/"))))
 
 (defun apigee--proper-subdirs (containing-dir)
   "Return list of full paths of proper subdirs found in CONTAINING-DIR."
@@ -655,17 +683,12 @@ Optionally filters on files with the given extension or SUFFIX."
                 (let ((clean-name (file-name-nondirectory file)))
                   (or
                    (and suffix
-                        (not (s-ends-with? suffix clean-name)))
+                        (not (string-suffix-p suffix clean-name)))
                    (string-match "^\\." clean-name)
                    (string-match "^#.*#$" clean-name)
                    (string-match "~$" clean-name)
                    (file-directory-p file))))
               (directory-files containing-dir t)))
-
-(defun apigee--sort-strings (strings)
-  "lexicographically sort a list of STRINGS"
-  (sort strings
-        (lambda (a b) (string< a b ))))
 
 (defun apigee--sort-by-string-car (list-o-lists)
 
@@ -677,7 +700,7 @@ lexicographically by the car of each element, which is a string."
 (defun apigee--get-target-template-filename (template-filename)
   "return the fullpath name of the target template file.
 "
-  (if (s-starts-with? "/" template-filename)
+  (if (string-prefix-p "/" template-filename)
       template-filename
     (apigee--join-path-elements apigee--base-template-dir "targets" template-filename)))
 
@@ -692,11 +715,10 @@ lexicographically by the car of each element, which is a string."
   "loads the policy templates for one POLICY-TYPE-DIRECTORY, which is a fully-
 qualified directory, ending in a policy-type name eg AccessEntity.  This
 is used to populate the menu of available policy templates."
-  (let (templ-list)
-    (dolist (this-template (apigee--proper-files policy-type-directory ".xml"))
-      (push (file-name-nondirectory this-template) templ-list))
-    (list (file-name-nondirectory policy-type-directory)
-          (apigee--sort-strings templ-list))))
+  (list (file-name-nondirectory policy-type-directory)
+        (sort (mapcar #'file-name-nondirectory
+                      (apigee--proper-files policy-type-directory ".xml"))
+              #'string<)))
 
 (defun apigee--policy-template-count ()
   "returns the total number of policy templates available in
@@ -705,22 +727,29 @@ is used to populate the menu of available policy templates."
          (mapcar (lambda (item) (length (cadr item)))
                  apigee--policy-template-alist)))
 
+(defun apigee--load-template-alist (sym label subdir list-entries make-entry &optional count)
+  "Set SYM to the template alist built from SUBDIR of the template dir.
+LIST-ENTRIES is called with the directory and returns the entries (files
+or directories); MAKE-ENTRY turns each into an alist element (NAME ...).
+The alist is sorted by name. Return (LABEL N DIR), where N is the number
+of templates: the length of the alist, or what COUNT returns for it."
+  (let* ((top-level-dir (apigee--join-path-elements apigee--base-template-dir subdir))
+         (alist (apigee--sort-by-string-car
+                 (mapcar (lambda (entry)
+                           (and apigee--verbose-logging (message "%s template %s" label entry))
+                           (funcall make-entry entry))
+                         (funcall list-entries top-level-dir)))))
+    (set sym alist)
+    (list label (funcall (or count #'length) alist) top-level-dir)))
+
 (defun apigee--load-asset-templates (asset-type)
   "Load the templates for ASSET-TYPE, a key in `apigee--asset-kinds',
 from the template dir, then set the kind's :templates variable to the alist."
-  (let* ((sym (apigee--asset-kind asset-type :templates))
-         (label asset-type)
-         (top-level-dir (apigee--join-path-elements apigee--base-template-dir
-                                                    (apigee--asset-kind asset-type :template-subdir))))
-    (set sym
-         (let (template-list)
-           (dolist (template-name (apigee--proper-subdirs top-level-dir))
-             (push
-              (list (file-name-nondirectory template-name) template-name)
-              template-list)
-             (and apigee--verbose-logging (message "%s template %s" label template-name)))
-           (apigee--sort-by-string-car template-list)))
-    (list label (length (symbol-value sym)) top-level-dir)))
+  (apigee--load-template-alist
+   (apigee--asset-kind asset-type :templates) asset-type
+   (apigee--asset-kind asset-type :template-subdir)
+   #'apigee--proper-subdirs
+   (lambda (dir) (list (file-name-nondirectory dir) dir))))
 
 (defun apigee-load-proxy-templates ()
   "Load proxy templates from the proxy template dir. "
@@ -753,17 +782,11 @@ Each item in the list is a list, (POLICY-TYPE (TEMPLATE...)),
 where POLICY-TYPE is one of {Quota, XMLToJSON, Javascript, etc},
 and TEMPLATE is the shortname of the file containing a template
 to fill in for a new policy."
-  (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "policies")))
-    (setq
-     apigee--policy-template-alist
-     (let (template-list)
-       (dolist (policy-type (apigee--proper-subdirs top-level-dir))
-         (push
-          (apigee--templates-for-one-policy-type policy-type)
-          template-list)
-         (and apigee--verbose-logging (message "policy type %s" policy-type)))
-       (apigee--sort-by-string-car template-list)))
-    (list "policy" (apigee--policy-template-count) top-level-dir)))
+  (apigee--load-template-alist
+   'apigee--policy-template-alist "policy" "policies"
+   #'apigee--proper-subdirs
+   #'apigee--templates-for-one-policy-type
+   (lambda (_) (apigee--policy-template-count))))
 
 
 (defun apigee-load-target-templates ()
@@ -773,16 +796,10 @@ Each child under the template directory should be a .xml file defining a
 target. The name of the file will be the name of the template in the
 resulting menu."
 
-  (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir "targets" )))
-    (setq apigee--target-template-alist
-          (let (template-list)
-            (dolist (template-fname (apigee--proper-files top-level-dir ".xml"))
-              (push
-               (list (apigee--trim-xml-suffix (file-name-nondirectory template-fname)) template-fname)
-               template-list)
-              (and apigee--verbose-logging (message "target template %s" template-fname)))
-            (apigee--sort-by-string-car template-list)))
-    (list "target" (length apigee--target-template-alist) top-level-dir)))
+  (apigee--load-template-alist
+   'apigee--target-template-alist "target" "targets"
+   (lambda (dir) (apigee--proper-files dir ".xml"))
+   (lambda (file) (list (file-name-base file) file))))
 
 
 (defun apigee-load-templates (top-level-dir &optional interactive)
@@ -816,39 +833,31 @@ Within each of those, there will be templates for those entities."
 Return the input, or DEFAULT-VAL if the input is empty. Return nil only
 when both are empty, never the empty string."
   (let ((response-val
-         (if (s-blank? default-val)
+         (if (apigee--blank-p default-val)
              (read-string (format "%s: " prompt-label))
            (read-string (format "%s (%s): " prompt-label default-val)
                         default-val))))
     (if (string-empty-p response-val)
-        (and (not (s-blank? default-val)) default-val)
+        (and (not (apigee--blank-p default-val)) default-val)
       response-val)))
 
 (defun apigee-get-organization (&optional want-prompt)
   "Returns the org to use for import and deployment. Uses a cached
 value, or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
-  (let ((org-local
-         (if (or want-prompt (s-blank? apigee-organization))
-             (apigee--read-or-default "organization name"
-                                      apigee-organization)
-           apigee-organization)))
-    (when (s-blank? org-local)
+  (let ((org (apigee--get-or-prompt 'apigee-organization "organization name" want-prompt)))
+    (when (apigee--blank-p org)
       (user-error "[apigee] An organization name is required"))
-    (setq apigee-organization org-local)))
+    org))
 
 (defun apigee-get-environment (&optional want-prompt)
   "Returns the environment to use for deployment. Uses a cached value,
 or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
-  (let ((env-local
-         (if (or want-prompt (s-blank? apigee-environment))
-             (apigee--read-or-default "environment name"
-                                      apigee-environment)
-           apigee-environment)))
-    (when (s-blank? env-local)
+  (let ((env (apigee--get-or-prompt 'apigee-environment "environment name" want-prompt)))
+    (when (apigee--blank-p env)
       (user-error "[apigee] An environment name is required"))
-    (setq apigee-environment env-local)))
+    env))
 
 (defun apigee-get-service-account-args-for-deployment (&optional want-prompt)
   "Returns the arguments to use on the apigeecli command line for the
@@ -864,13 +873,9 @@ like any other value, so it is not asked again.
 
 Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
   (interactive "P")
-  (let ((sa-local
-         (if (or want-prompt (not apigee-service-account))
-             (apigee--read-or-default "service account"
-                                      apigee-service-account)
-           apigee-service-account))
-        (no-sa-p (lambda (sa) (or (s-blank? sa) (equal sa "-")))))
-    (when (and (not (funcall no-sa-p sa-local)) (not (s-contains? "@" sa-local)))
+  (let ((sa-local (apigee--get-or-prompt 'apigee-service-account "service account" want-prompt))
+        (no-sa-p (lambda (sa) (or (apigee--blank-p sa) (equal sa "-")))))
+    (when (and (not (funcall no-sa-p sa-local)) (not (string-search "@" sa-local)))
       ;; user provided short form; append the boilerplate suffix.
       (setq sa-local (format "%s@%s.iam.gserviceaccount.com" sa-local (apigee-get-organization) )))
     (setq apigee-service-account sa-local) ;; for next time, and for persistence
@@ -879,7 +884,7 @@ Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
 
 (defun apigee--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
-  (s-chop-suffix ".xml" s))
+  (string-remove-suffix ".xml" s))
 
 ;; 20250527-1816 - not needed now that I'm using the minibuffer
 ;; (defun apigee--get-menu-position ()
@@ -894,7 +899,7 @@ Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
 (defun apigee--find-bundle (flavor) ;; "apiproxy" or "sharedflowbundle"
   "returns list of (PATH TYPE) if a bundle is found in the current directory."
   (let ((right-here (concat (file-name-directory default-directory) flavor)))
-    (if (apigee--is-existing-directory right-here)
+    (if (file-directory-p right-here)
         (list (file-name-directory default-directory) flavor)
       (let ((elts (reverse (split-string (file-name-directory default-directory) "/")))
             r)
@@ -925,7 +930,7 @@ If the apiproxy is defined in a structure like this:
 
 ... and this function is invoked from anywhere in one of those directories,
 then ROOT is ~/foo/bar/APINAME/ (expanded). It always ends in slash."
-  (when-let* ((found (cl-some #'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))
+  (when-let* ((found (seq-some #'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))
     (list :root (file-truename (apigee--insure-trailing-slash (car found)))
           :type (cadr found))))
 
@@ -947,13 +952,8 @@ With no SUBDIRS, return the bundle directory itself, e.g. ROOT/apiproxy/."
 (defun apigee--suggested-target-name (targets-dir template-name)
   "suggest a name for a target given a TEMPLATE-NAME for the target.
 Based on file availability in TARGETS-DIR."
-  (let ((val 1)
-        (next-name (lambda (v) (concat template-name "-" (format "%d" v)))))
-    (let ((tname (funcall next-name val)))
-      (while (not (apigee--target-name-is-available targets-dir tname))
-        (setq val (1+ val)
-              tname (funcall next-name val)))
-      tname)))
+  (apigee--first-available-name
+   template-name (lambda (name) (apigee--target-name-is-available targets-dir name)) 1))
 
 ;;;###autoload
 (defun apigee-add-target ()
@@ -972,8 +972,6 @@ choose a target type to insert."
       (when (string-empty-p template-name)
         (user-error "[apigee] No target template chosen"))
       (let ((target-dir (apigee--bundle-subdir bundle "targets"))
-            (have-name nil)
-            (target-name-prompt "target name: ")
             (choice (assoc template-name apigee--target-template-alist)))
         (let* ((template-filename (nth 1 choice))
                (source-target-template-filename
@@ -985,12 +983,9 @@ choose a target type to insert."
 
           (let* ((default-value (apigee--suggested-target-name target-dir template-name))
                  (target-name
-                  (let (n)
-                    (while (not have-name)
-                      (setq n (read-string target-name-prompt default-value nil default-value)
-                            have-name (apigee--target-name-is-available target-dir n)
-                            target-name-prompt "That name is in use. Target name: " ))
-                    n))
+                  (apigee--read-unused-name
+                   "Target" default-value
+                   (lambda (name) (apigee--target-name-is-available target-dir name))))
                  (elaborated-contents
                   (apigee--elaborate-template
                    ;; does this need to be qualified as fullpath?
@@ -1090,11 +1085,6 @@ available choices is the hierarchical list of available policies."
    (apigee--transform-policy-alist apigee--policy-template-alist)))
 
 
-(defun apigee--is-existing-directory (dir-name)
-  "Tests to see whether a name refers to an existing directory.
-A symbolic link to a directory counts."
-  (file-directory-p dir-name))
-
 (defun apigee--fixup-script-name (name &optional prefix)
   "returns a stripped name suitable for use for a file in the resources/jsc directory,
 or resources/py, or resources/xsl."
@@ -1119,7 +1109,7 @@ if no file exists by that name in POLICIES-DIR."
 
 (defun apigee--maybe-capitalize (str)
   "Capitalizes the string STR unless the string is an acronym like HS256 or PBES2."
-  (if (apigee--string-is-uppercase-acronym-p str) str (s-capitalize str)))
+  (if (apigee--string-is-uppercase-acronym-p str) str (apigee--capitalize-first str)))
 
 (defun apigee--policy-name-elements (ptype policy-template-filename)
   "Returns a list containing name elements, (PREFIX SUFFIX), for a policy file."
@@ -1130,7 +1120,7 @@ if no file exists by that name in POLICIES-DIR."
                                  (if is-jwt (seq-drop name-elements 1) name-elements)
                                  "-"))
          (name-prefix (if is-jwt
-                          (concat (s-capitalize (car name-elements)) ptype)
+                          (concat (apigee--capitalize-first (car name-elements)) ptype)
                         (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
     (list name-prefix name-suffix)))
 
@@ -1142,16 +1132,9 @@ Uses a counter, so the name is unused in POLICIES-DIR.
   (let* ((name-elements (apigee--policy-name-elements ptype filename))
          (name-prefix (car name-elements))
          (name-suffix (cadr name-elements)))
-    (let ((val 0)
-          (next-name (lambda (v)
-                       (if (> v 0)
-                           (concat name-prefix "-" name-suffix "-" (format "%d" v))
-                         (concat name-prefix "-" name-suffix)))))
-      (let ((pname (funcall next-name val)))
-        (while (not (apigee--policy-name-is-available policies-dir pname))
-          (setq val (1+ val)
-                pname (funcall next-name val)))
-        pname))))
+    (apigee--first-available-name
+     (concat name-prefix "-" name-suffix)
+     (lambda (name) (apigee--policy-name-is-available policies-dir name)))))
 
 (defun apigee-gcloud-auth-print-access-token (&rest _)
   "Return the output of gcloud auth print-access-token."
@@ -1199,12 +1182,12 @@ environment and the ='validateBundle.py'= script, relative to
             (base-dir (if (file-name-absolute-p apigee-xmlschema-validator-home)
                           apigee-xmlschema-validator-home
                         (file-truename (apigee--join-path-elements apigee-el-dir apigee-xmlschema-validator-home))))
-            (_ (apigee--is-existing-directory base-dir))
+            (_ (file-directory-p base-dir))
             (py-dir (apigee--join-path-elements base-dir "py"))
-            (_ (apigee--is-existing-directory py-dir))
+            (_ (file-directory-p py-dir))
             (venv-name (seq-find
                         (lambda (v)
-                          (apigee--is-existing-directory (apigee--join-path-elements py-dir v)))
+                          (file-directory-p (apigee--join-path-elements py-dir v)))
                         '(".venv" "venv")))
             (full-venv-dir (apigee--join-path-elements py-dir venv-name)) ; This is the path to the .venv or venv directory itself
             (validate-script (apigee--join-path-elements py-dir "validateBundle.py"))
@@ -1396,16 +1379,8 @@ as the root of the current buffer.
 Used as a predicate for `save-some-buffers'."
   (let ((bundle-dir (plist-get (apigee--bundle) :root)))
     (and bundle-dir
-         (not (s-blank? bundle-dir))
+         (not (apigee--blank-p bundle-dir))
          (equal bundle-dir root-dir-in-question))))
-
-(defun dc-find-item-in-list-of-lists (list-of-lists target-string)
-  "Find the first item in LIST-OF-LISTS whose car matches TARGET-STRING.
-Returns nil if no such item is found."
-  (catch 'found
-    (dolist (item list-of-lists)
-      (when (string= (car item) target-string)
-        (throw 'found item)))))
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy or sharedflow."
@@ -1431,7 +1406,10 @@ Returns nil if no such item is found."
                   (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
                          (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
                          (item
-                          (dc-find-item-in-list-of-lists tramp-connection-properties safe-ssh-spec-pattern)))
+                          (seq-find (lambda (entry)
+                                      (and (equal (car entry) safe-ssh-spec-pattern)
+                                           (equal (cadr entry) "remote-shell")))
+                                    tramp-connection-properties)))
                     (if (not item)
                         (add-to-list 'tramp-connection-properties
                                      (list safe-ssh-spec-pattern
@@ -1545,7 +1523,7 @@ Running it again on a proxy that already has the logic changes nothing."
   (apigee--require-apiproxy "Injecting the revision logic")
   (let* ((bundle (apigee--require-bundle))
          (bundle-type (plist-get bundle :type)))
-    (if (s-equals? bundle-type "apiproxy")
+    (if (equal bundle-type "apiproxy")
         (let* ((bundle-policy-dir (apigee--bundle-subdir bundle "policies"))
                (clean-headers-policy
                 (apigee--ensure-assign-message-policy
@@ -1709,11 +1687,7 @@ of them, NEW-CHILD becomes its last child."
 (defun apigee--elaborate-template (fullpath-template-filename thing-name)
   "returns the contents of the named template with the ## placeholders
 replaced."
-  (let ((raw-template (apigee--get-template-contents fullpath-template-filename)))
-    ;;(progn)
-    (while (string-match "##" raw-template)
-      (setq raw-template (replace-match thing-name t t raw-template)))
-    raw-template))
+  (string-replace "##" thing-name (apigee--get-template-contents fullpath-template-filename)))
 
 
 ;;;###autoload
@@ -1733,19 +1707,14 @@ appropriate.
     (when choice ;; is a cons cell
       (let ((policy-dir (apigee--bundle-subdir bundle "policies"))
             (ptype (car choice))
-            (template-filename (concat (cadr choice) ".xml"))
-            (have-name nil)
-            (policy-name-prompt "policy name: "))
+            (template-filename (concat (cadr choice) ".xml")))
         (and (not (file-exists-p policy-dir))
              (make-directory policy-dir))
         (let* ((default-value (apigee--suggested-policy-name policy-dir ptype template-filename))
                (policy-name
-                (let (n)
-                  (while (not have-name)
-                    (setq n (read-string policy-name-prompt default-value nil default-value)
-                          have-name (apigee--policy-name-is-available policy-dir n)
-                          policy-name-prompt "That name is in use. Policy name: " ))
-                  n))
+                (apigee--read-unused-name
+                 "Policy" default-value
+                 (lambda (name) (apigee--policy-name-is-available policy-dir name))))
                (fullpath-template-filename
                 (apigee--join-path-elements apigee--base-template-dir "policies" ptype template-filename))
                (elaborated-contents
@@ -1788,7 +1757,7 @@ proxy/sharedflow bundle"
               (bundle (apigee--bundle)))
     (and (file-exists-p s)
          ;; The bundle root is a truename, so compare against S's truename.
-         (s-starts-with? (apigee--bundle-subdir bundle "policies")
+         (string-prefix-p (apigee--bundle-subdir bundle "policies")
                          (file-truename s)))))
 
 (defun apigee--current-policy-name ()
@@ -1796,14 +1765,12 @@ proxy/sharedflow bundle"
 is visiting a policy file. otherwise nil."
   (let ((current-filename (buffer-file-name)))
     (if (apigee--is-policy-file current-filename)
-        (s-chop-suffix ".xml" (car (reverse (split-string current-filename
-                                                          "/")))))))
+        (file-name-base current-filename))))
 (defun apigee--list-policies (bundle)
   "Return the sorted names of the policies in BUNDLE."
-  (let ((fq-names (apigee--sort-strings
-                   (apigee--proper-files (apigee--bundle-subdir bundle "policies") ".xml"))))
-    (mapcar (lambda (s) (s-chop-suffix ".xml" (car (reverse (split-string s "/")))))
-            fq-names)))
+  (sort (mapcar #'file-name-base
+                (apigee--proper-files (apigee--bundle-subdir bundle "policies") ".xml"))
+        #'string<))
 
 (defun apigee--policy-name-char-p (char)
   "Return non-nil if CHAR can be part of a policy name.
@@ -1843,7 +1810,7 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
            (new-name (read-string (format "rename '%s' to : " name-of-policy-to-rename)
                                   name-of-policy-to-rename nil name-of-policy-to-rename)))
 
-      (if (s-equals? name-of-policy-to-rename new-name)
+      (if (equal name-of-policy-to-rename new-name)
           (message "nothing to do.")
         (if (member new-name current-policies)
             (message "there is already a policy with that name.")
@@ -1862,7 +1829,7 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
                                                     name-of-policy-to-rename new-name)
                                                (setq count-of-changes (1+ count-of-changes))
                                                (unless (or original-modified
-                                                           (s-equals-p interactive-buffer-name (buffer-name)))
+                                                           (equal interactive-buffer-name (buffer-name)))
                                                  (save-buffer))))))))
 
                 ;; rename the file for the policy
@@ -1988,7 +1955,7 @@ from the copies."
   (dolist (subdir subdirs)
     (let ((source-subdir (apigee--join-path-elements source-dir subdir))
           (dest-subdir (apigee--join-path-elements dest-dir subdir)))
-      (when (apigee--is-existing-directory source-subdir)
+      (when (file-directory-p source-subdir)
         (copy-directory source-subdir dest-subdir t nil)
         (apigee--clean-files-from-dirtree dest-subdir apigee--editor-temp-file-globs)))))
 
@@ -2088,11 +2055,11 @@ TEMPLATE-ALIST - the alist of templates.
 TEMPLATE-NAME - the name of the asset template, as stored in the templates/<asset-type> directory.
 CONTAINING-DIR - name of an existing directory into which to insert the new asset.
 "
-  (if (not (apigee--is-existing-directory containing-dir))
+  (if (not (file-directory-p containing-dir))
       (error "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'"))
   (let ((template-match (assoc template-name template-alist))
         (new-dir (apigee--join-path-elements containing-dir asset-name)))
-    (if (apigee--is-existing-directory new-dir)
+    (if (file-directory-p new-dir)
         (error "[apigee] new-dir already exists in `apigee--new-asset-from-template'"))
     (if (not template-match)
         (error "[apigee] unknown template in `apigee--new-asset-from-template'"))
@@ -2105,17 +2072,17 @@ and non-existent directories, in sorted order.  If WITH-TIME is non-nil,
 emit the list with time (suitable for persisting). Otherwise without -
 it will be a bare list of strings representing directory paths, suitable
 for use within an `completing-read'."
-  (let ((result
-         (let ((days-considered-stale 30))
-           (-sort (lambda (a b)
-                    (> (float-time (time-subtract (apply 'encode-time (cadr a)) (apply 'encode-time (cadr b)))) 0))
-                  (-filter (lambda (x)
-                             (and
-                              (apigee--is-existing-directory (car x))
-                              (apigee--time-is-within-days (apply 'encode-time (cadr x)) days-considered-stale)))
-                           apigee--recently-used-asset-homes)))))
+  (let* ((days-considered-stale 30)
+         (fresh (seq-filter (lambda (x)
+                              (and
+                               (file-directory-p (car x))
+                               (apigee--time-is-within-days (encode-time (cadr x)) days-considered-stale)))
+                            apigee--recently-used-asset-homes))
+         ;; most recent first
+         (result (seq-sort (lambda (a b) (time-less-p (encode-time (cadr b)) (encode-time (cadr a))))
+                           fresh)))
     (if with-time result
-      (-map (lambda (n) (car n)) result))))
+      (mapcar #'car result))))
 
 (defun apigee--time-is-within-days (the-time delta-days)
   "Returns t if THE-TIME is less than DELTA-DAYS ago."
@@ -2170,13 +2137,13 @@ directory."
 (defun apigee--remember-asset-home (containing-dir)
   "stores one directory with the current time in the list"
   (setq apigee--recently-used-asset-homes
-        (-remove (lambda (x)  (equal (car x) containing-dir)) apigee--recently-used-asset-homes))
+        (seq-remove (lambda (x)  (equal (car x) containing-dir)) apigee--recently-used-asset-homes))
   (setq apigee--recently-used-asset-homes (cons (list containing-dir (decode-time nil t))
                                                 apigee--recently-used-asset-homes)))
 
 (defun apigee--require-input (value what)
   "Return VALUE, or signal a `user-error' saying WHAT is required."
-  (if (s-blank? value)
+  (if (apigee--blank-p value)
       (user-error "[apigee] %s is required" what)
     value))
 

@@ -7,7 +7,7 @@
 ;;   emacs -Q --batch -L . -f package-initialize \
 ;;     -l apigee-tests.el -f ert-run-tests-batch-and-exit
 ;;
-;; `package-initialize' provides s, dash and yasnippet.
+;; `package-initialize' provides yasnippet.
 ;;
 ;; Loading apigee.el reads, and on exit writes, the settings file in
 ;; `user-emacs-directory'. So this file points that at a temporary
@@ -562,7 +562,11 @@ Return the parsed ProxyEndpoint element afterwards."
     (apigee-tests--new-asset "proxy" "p1" "loopback" dir)
     (let ((link (file-name-concat dir "p1-link")))
       (make-symbolic-link (file-name-concat dir "p1") link)
-      (should (apigee--is-existing-directory link))
+      ;; A symlinked containing directory is accepted (1.15).
+      (make-symbolic-link dir (file-name-concat dir "home-link"))
+      (apigee--new-asset-from-template "proxy" "p5" apigee--proxy-template-alist "loopback"
+                                       (file-name-concat dir "home-link"))
+      (should (file-directory-p (file-name-concat dir "p5" "apiproxy")))
       (let ((policy (car (apigee--proper-files
                           (file-name-concat link "apiproxy" "policies") ".xml"))))
         (with-current-buffer (find-file-noselect policy)
@@ -651,7 +655,7 @@ Return the parsed ProxyEndpoint element afterwards."
   (with-temp-buffer
     (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
     (let ((requires (car (read-from-string (lm-header "Package-Requires")))))
-      (should (equal (mapcar #'car requires) '(emacs s dash yasnippet))))))
+      (should (equal (mapcar #'car requires) '(emacs yasnippet))))))
 
 ;;; Bundle lookup (2.2)
 
@@ -722,6 +726,60 @@ Return the parsed ProxyEndpoint element afterwards."
     (let ((sf (apigee-tests--read (file-name-concat dir "s1" "sharedflowbundle" "s1.xml"))))
       (should (string-match-p "name=\"s1\"" sf))
       (should (string-match-p "<DisplayName>s1</DisplayName>" sf)))))
+
+;;; Shared helpers (3.4 - 3.11)
+
+(ert-deftest apigee-test-3.4-first-available-name ()
+  (let ((taken '("a" "a-1" "b-1")))
+    (should (equal (apigee--first-available-name "a" (lambda (n) (not (member n taken)))) "a-2"))
+    (should (equal (apigee--first-available-name "c" (lambda (n) (not (member n taken)))) "c"))
+    (should (equal (apigee--first-available-name "b" (lambda (n) (not (member n taken))) 1) "b-2"))))
+
+(ert-deftest apigee-test-3.5-read-unused-name ()
+  (apigee-tests--with-answers '("taken" "also-taken" "free")
+    (should (equal (apigee--read-unused-name "Policy" "dflt"
+                                             (lambda (n) (equal n "free")))
+                   "free"))
+    (should (equal (mapcar #'car (reverse apigee-tests--prompts))
+                   '("policy name: " "That name is in use. Policy name: "
+                     "That name is in use. Policy name: ")))))
+
+(ert-deftest apigee-test-3.6-get-or-prompt ()
+  (let ((apigee-lint-exclusions "TD002"))
+    (apigee-tests--with-answers '("X")
+      (should (equal (apigee-get-lint-exclusions) "TD002"))
+      (should-not apigee-tests--prompts)
+      (should (equal (apigee-get-lint-exclusions t) "X"))
+      (should (equal apigee-lint-exclusions "X")))))
+
+(ert-deftest apigee-test-3.7-3.8-template-alists ()
+  (apigee-load-templates apigee--base-template-dir)
+  (let ((target (car apigee--target-template-alist))
+        (policy (assoc "AssignMessage" apigee--policy-template-alist)))
+    (should (equal (car target) (file-name-base (cadr target))))
+    (should (file-exists-p (cadr target)))
+    (should (cl-every (lambda (f) (string-suffix-p ".xml" f)) (cadr policy)))
+    (should (equal (cadr policy) (sort (copy-sequence (cadr policy)) #'string<)))))
+
+(ert-deftest apigee-test-3.11-capitalize-first ()
+  "Same as the s-capitalize it replaces: only the first letter is upcased."
+  (should (equal (apigee--capitalize-first "x-API-key") "X-api-key"))
+  (should (equal (apigee--capitalize-first "") ""))
+  (should (equal (apigee--policy-name-elements "AssignMessage" "set Content-Type.xml")
+                 '("AM" "Set-Content-type"))))
+
+(ert-deftest apigee-test-3.11-no-s-or-dash ()
+  "apigee.el uses only built-ins, seq and cl-lib for strings and sequences."
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
+    (set-syntax-table emacs-lisp-mode-syntax-table)
+    (goto-char (point-min))
+    (let (found)
+      (while (re-search-forward "(\\(s-[a-z]+\\|-[a-z]+\\)[ )]" nil t)
+        (unless (nth 4 (syntax-ppss)) (push (match-string 1) found)))
+      (should-not found))
+    (goto-char (point-min))
+    (should-not (re-search-forward "^(require '\\(s\\|dash\\))" nil t))))
 
 ;;; Byte compilation (1.18, 2.9)
 
