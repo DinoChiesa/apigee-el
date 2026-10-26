@@ -146,7 +146,7 @@ via, for example,
 (defvar apigee-placeholders-alist
   `(
     (c               . apigee--concatenate-command-string)
-    (n               . apigee--proxy-name)
+    (n               . apigee--bundle-name)
     (o               . apigee-get-organization)
     (e               . apigee-get-environment )
     (lint-exclusions . apigee-get-lint-exclusions )
@@ -985,16 +985,25 @@ environment and the ='validateBundle.py'= script, relative to
           (error (format "Python executable not found at %s" python-path))))
     (error "Could not resolve XML Schema validator program. Check 'apigee-xmlschema-validator-home'")))
 
-(defun apigee--proxy-name (&rest ignored)
-  "Returns the short name for an API proxy. It accepts an argument
-because the logic in `apigee--replace-placeholder' expects it."
-  (let ((bundle-dir (apigee--root-path-of-bundle))
-        (bundle-type (apigee--type-of-bundle)))
-    (if (s-equals? bundle-type "apiproxy")
-        (let* ((bundle-apiproxy-dir (concat bundle-dir bundle-type))
-               (file-list (apigee--proper-files bundle-apiproxy-dir ".xml"))
-               (proxy-defn-file (apigee--verify-exactly-one file-list bundle-apiproxy-dir)))
-          (apigee--trim-xml-suffix (file-name-nondirectory proxy-defn-file))))))
+(defun apigee--bundle-name (&rest _)
+  "Return the short name of the current API proxy or sharedflow.
+The name comes from the single top-level XML file in the bundle
+directory. It accepts arguments because `apigee--replace-placeholder'
+passes one."
+  (when-let* ((bundle-root (apigee--root-path-of-bundle))
+              (bundle-type (apigee--type-of-bundle)))
+    (let* ((bundle-dir (concat bundle-root bundle-type))
+           (file-list (apigee--proper-files bundle-dir ".xml"))
+           (defn-file (apigee--verify-exactly-one file-list bundle-dir)))
+      (apigee--trim-xml-suffix (file-name-nondirectory defn-file)))))
+
+(defun apigee--require-apiproxy (action)
+  "Signal a `user-error' if the current bundle is a sharedflow.
+ACTION names what the user tried, for the message. The import and deploy
+commands in `apigee-commands-alist' use \"apigeecli apis\" and so work
+only for API proxies."
+  (when (equal (apigee--type-of-bundle) "sharedflowbundle")
+    (user-error "[apigee] %s supports only API proxies, not sharedflows" action)))
 
 (defun apigee--replace-placeholder (want-prompt)
   "used in seq-reduce. I defined this in a formal fn rather
@@ -1117,11 +1126,11 @@ Returns nil if no such item is found."
         (throw 'found item)))))
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
-  "Run a command for the current API proxy."
+  "Run a command for the current API proxy or sharedflow."
   (if-let* ((bundle-dir (apigee--root-path-of-bundle)))
-      (if-let* ((proxy-name (apigee--proxy-name))
+      (if-let* ((bundle-name (apigee--bundle-name))
                 (cmd (apigee--get-command command-symbol want-prompt)))
-          (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " proxy-name "*")))
+          (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " bundle-name "*")))
                 (remote-host
                  (save-match-data ; is usually a good idea
                    (and
@@ -1181,8 +1190,8 @@ Returns nil if no such item is found."
                          (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
                            (replace-match "--token ***masked***")))
                        (setq buffer-read-only t))))))))
-        (error "Can't find proxy name, or can't resolve command."))
-    (error "You do not appear to be in an API Proxy directory.")))
+        (error "Can't find bundle name, or can't resolve command."))
+    (error "You do not appear to be in an API proxy or sharedflow directory.")))
 
 
 ;; (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)
@@ -1203,7 +1212,7 @@ Returns nil if no such item is found."
 ;;     (setq buffer-read-only t)))))))
 
 (defun apigee-lint-asset (have-prefix)
-  "Run apigeelint on the API proxy.
+  "Run apigeelint on the current API proxy or sharedflow.
 
 With a prefix argument (e.g., C-u), prompt the user to edit
 the command before running it."
@@ -1211,7 +1220,7 @@ the command before running it."
   (apigee--run-command-for-proxy "apigeelint" 'lint have-prefix))
 
 (defun apigee-validate-xml-for-asset (have-prefix)
-  "Run the XML Validator on the API proxy.
+  "Run the XML Validator on the current API proxy or sharedflow.
 
 With a prefix argument (e.g., C-u), prompt the user to edit
 the command before running it."
@@ -1225,12 +1234,14 @@ the command before running it."
 With a prefix argument (e.g., C-u), prompt the user for org/env
 before running it."
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (apigee--require-apiproxy "Import and deploy")
   (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy have-prefix))
 
 ;;;###autoload
 (defun apigee-import-proxy (have-prefix)
   "Import the API proxy."
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (apigee--require-apiproxy "Import")
   (apigee--run-command-for-proxy "apigeecli" 'import have-prefix))
 
 ;;;###autoload
@@ -1239,6 +1250,7 @@ before running it."
 filesystem, beyond the name. It's assumed you've recently called
 `apigee-import-proxy', and there is a revision to deploy."
   (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (apigee--require-apiproxy "Deploy")
   (apigee--run-command-for-proxy "apigeecli" 'deploy have-prefix))
 
 ;;;###autoload
