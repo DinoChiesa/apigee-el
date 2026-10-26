@@ -135,10 +135,15 @@ the prerequisites via `pip install -r requirements.txt`"
     (import . ("%apigeecli" "apis" "create" "bundle" "-f" "apiproxy" "--name" "%n" "-o" "%o" "--token" "%t"))
     (deploy . ("%apigeecli" "apis" "deploy" "--wait" "--name" "%n" "--ovr" "--org" "%o" "--env" "%e" "%sa_args" "--token" "%t"))
     (import-and-deploy . (import deploy))
+    (sharedflow-import . ("%apigeecli" "sharedflows" "create" "bundle" "-f" "sharedflowbundle" "--name" "%n" "-o" "%o" "--token" "%t"))
+    (sharedflow-deploy . ("%apigeecli" "sharedflows" "deploy" "--wait" "--name" "%n" "--ovr" "--org" "%o" "--env" "%e" "%sa_args" "--token" "%t"))
+    (sharedflow-import-and-deploy . (sharedflow-import sharedflow-deploy))
     (lint . ("%apigeelint" "-s" "." "-e" "%lint-exclusions" "-f" "visualstudio.js"))
     (validate . ("%validate-cmd" "--source" "."))
     )
   "The commands run by `apigee-lint-asset', `apigee-import-proxy' and so on.
+In a sharedflow, the import and deploy commands use the entries named
+sharedflow-import, sharedflow-deploy and sharedflow-import-and-deploy.
 Each value is one of:
 - a list of words. A word is either literal, or %KEY where KEY is in
   `apigee-programs-alist' or `apigee-placeholders-alist'; such a word
@@ -366,12 +371,16 @@ template.")
      :template-subdir "proxies"
      :bundle "apiproxy"
      :subdirs ("proxies" "policies" "resources" "targets")
-     :after-copy apigee--set-proxy-basepath)
+     :after-copy apigee--set-proxy-basepath
+     :commands ((import . import) (deploy . deploy)
+                (import-and-deploy . import-and-deploy)))
     ("sharedflow"
      :templates apigee--sharedflow-template-alist
      :template-subdir "sharedflows"
      :bundle "sharedflowbundle"
-     :subdirs ("sharedflows" "policies" "resources")))
+     :subdirs ("sharedflows" "policies" "resources")
+     :commands ((import . sharedflow-import) (deploy . sharedflow-deploy)
+                (import-and-deploy . sharedflow-import-and-deploy))))
   "What differs between the kinds of asset created from a template.
 Each entry is (ASSET-TYPE . PLIST), with these properties:
   :templates        variable holding the loaded templates, an alist
@@ -380,7 +389,9 @@ Each entry is (ASSET-TYPE . PLIST), with these properties:
   :bundle           name of the bundle directory, e.g. \"apiproxy\"
   :subdirs          bundle subdirectories copied from a template
   :after-copy       optional function called with the new bundle
-                    directory and the asset name, after the copy")
+                    directory and the asset name, after the copy
+  :commands         alist mapping the actions import, deploy and
+                    import-and-deploy to keys in `apigee-commands-alist'")
 
 (defun apigee--asset-kind (asset-type property)
   "Return PROPERTY of ASSET-TYPE from `apigee--asset-kinds'."
@@ -1247,9 +1258,8 @@ called with WANT-PROMPT."
 
 (defun apigee--require-apiproxy (action)
   "Signal a `user-error' if the current bundle is a sharedflow.
-ACTION names what the user tried, for the message. The import and deploy
-commands in `apigee-commands-alist' use \"apigeecli apis\" and so work
-only for API proxies."
+ACTION names what the user tried, for the message, e.g. adding a target,
+which sharedflows don't have."
   (when (equal (plist-get (apigee--bundle) :type) "sharedflowbundle")
     (user-error "[apigee] %s supports only API proxies, not sharedflows" action)))
 
@@ -1518,30 +1528,39 @@ the command before running it."
   (apigee--run-command-for-proxy "validate" 'validate want-prompt))
 
 ;;;###autoload
+(defun apigee--bundle-command (action)
+  "Return the `apigee-commands-alist' key for ACTION in the current bundle.
+ACTION is import, deploy or import-and-deploy; the asset kind's
+:commands in `apigee--asset-kinds' decide. Outside a bundle, return
+ACTION, and let the command report that."
+  (let* ((type (plist-get (apigee--bundle) :type))
+         (kind (car (seq-find (lambda (k) (equal (plist-get (cdr k) :bundle) type))
+                              apigee--asset-kinds))))
+    (if kind
+        (alist-get action (apigee--asset-kind kind :commands))
+      action)))
+
 (defun apigee-import-and-deploy-proxy (want-prompt)
-  "Import AND deploy the API proxy.
+  "Import AND deploy the API proxy or sharedflow.
 
 With a prefix argument (e.g., C-u), prompt the user for org/env
 before running it."
   (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
-  (apigee--require-apiproxy "Import and deploy")
-  (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy want-prompt))
+  (apigee--run-command-for-proxy "apigeecli" (apigee--bundle-command 'import-and-deploy) want-prompt))
 
 ;;;###autoload
 (defun apigee-import-proxy (want-prompt)
-  "Import the API proxy."
+  "Import the API proxy or sharedflow."
   (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
-  (apigee--require-apiproxy "Import")
-  (apigee--run-command-for-proxy "apigeecli" 'import want-prompt))
+  (apigee--run-command-for-proxy "apigeecli" (apigee--bundle-command 'import) want-prompt))
 
 ;;;###autoload
 (defun apigee-deploy-proxy (want-prompt)
-  "Deploy the API proxy. This doesn't use the proxy configuration in the
+  "Deploy the API proxy or sharedflow. This doesn't use the configuration in the
 filesystem, beyond the name. It's assumed you've recently called
 `apigee-import-proxy', and there is a revision to deploy."
   (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
-  (apigee--require-apiproxy "Deploy")
-  (apigee--run-command-for-proxy "apigeecli" 'deploy want-prompt))
+  (apigee--run-command-for-proxy "apigeecli" (apigee--bundle-command 'deploy) want-prompt))
 
 ;;;###autoload
 (defun apigee-inject-proxy-revision-logic ()

@@ -378,8 +378,9 @@ Return the parsed ProxyEndpoint element afterwards."
        (let ((captured (apigee-tests--captured-command #'apigee-lint-asset)))
          (should (string-match-p "lint.js -s \\. " (car captured)))
          (should (equal (cadr captured) (file-name-concat dir "s1/"))))
-       (should-error (apigee-import-proxy nil) :type 'user-error)
-       (should-error (apigee-deploy-proxy nil) :type 'user-error)))))
+       ;; Since 2.8, import and deploy work in sharedflows too.
+       (should (string-match-p "sharedflows create bundle"
+                               (car (apigee-tests--captured-command #'apigee-import-proxy))))))))
 
 (ert-deftest apigee-test-1.19-import-and-deploy-uses-and ()
   (apigee-tests--with-temp-dir dir
@@ -494,6 +495,32 @@ Return the parsed ProxyEndpoint element afterwards."
        (should (string-match-p "--token %t\\'" shown))
        (should-not (let ((case-fold-search nil)) (string-match-p "TOK" shown)))
        (should (string-match-p "--token TOK --extra\\'" ran))))))
+
+;;; Sharedflow import and deploy (2.8)
+
+(ert-deftest apigee-test-2.8-sharedflow-import-and-deploy ()
+  (apigee-tests--with-temp-dir dir
+    (apigee-tests--with-command-env
+     (let ((default-directory (apigee-tests--new-asset "sharedflow" "s1" "basic" dir)))
+       (should (string-match-p
+                "sharedflows create bundle -f sharedflowbundle --name s1 -o my-org --token TOK\\'"
+                (car (apigee-tests--captured-command #'apigee-import-proxy))))
+       (should (string-match-p
+                "sharedflows deploy --wait --name s1 --ovr --org my-org --env test --token TOK\\'"
+                (car (apigee-tests--captured-command #'apigee-deploy-proxy))))
+       (should (string-match-p
+                "sharedflows create bundle .* && .*sharedflows deploy "
+                (car (apigee-tests--captured-command #'apigee-import-and-deploy-proxy))))))
+    (apigee-tests--with-command-env
+     (let ((default-directory (apigee-tests--new-asset "proxy" "p1" "loopback" dir)))
+       (should (string-match-p "apis create bundle -f apiproxy --name p1 "
+                               (car (apigee-tests--captured-command #'apigee-import-proxy))))))))
+
+(ert-deftest apigee-test-2.8-every-kind-maps-every-action ()
+  (dolist (kind apigee--asset-kinds)
+    (dolist (action '(import deploy import-and-deploy))
+      (should (assq (alist-get action (plist-get (cdr kind) :commands))
+                    apigee-commands-alist)))))
 
 ;;; Guards and prompts (1.8 - 1.12, 1.26)
 
