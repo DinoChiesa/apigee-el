@@ -808,9 +808,66 @@ Return the parsed ProxyEndpoint element afterwards."
     (dolist (entry apigee--policytype-shortform)
       (should (member (car entry) dirs)))))
 
+;;; Configuration (2.6)
+
+(defconst apigee-tests--customs
+  '(apigee-organization apigee-environment apigee-service-account apigee-lint-exclusions
+    apigee-commands-alist apigee-programs-alist apigee-xmlschema-validator-home
+    apigee-verbose-logging apigee-timer-minutes)
+  "The user options that review item 2.6 made customizable.")
+
+(ert-deftest apigee-test-2.6a-user-options-are-customizable ()
+  (require 'wid-edit)
+  (let ((members (mapcar #'car (get 'apigee 'custom-group))))
+    (dolist (sym apigee-tests--customs)
+      (ert-info ((symbol-name sym))
+        (should (custom-variable-p sym))
+        (should (memq sym members))
+        ;; The declared :type accepts the default value.
+        (should (widget-apply (widget-convert (get sym 'custom-type))
+                              :match (eval (car (get sym 'standard-value)) t)))))))
+
+(ert-deftest apigee-test-2.6a-renamed-variables-have-aliases ()
+  (dolist (pair '((apigee--verbose-logging . apigee-verbose-logging)
+                  (apigee--timer-minutes . apigee-timer-minutes)
+                  (apigee-timer . apigee--timer)
+                  (apigee-function-cache . apigee--function-cache)))
+    (should (eq (indirect-variable (car pair)) (cdr pair)))
+    (should (get (car pair) 'byte-obsolete-variable))))
+
+(ert-deftest apigee-test-2.6b-settings-file-round-trip ()
+  "State is written with symbols, and old files with strings still load."
+  (apigee-tests--with-temp-dir dir
+    (let ((user-emacs-directory dir)
+          (apigee-organization nil)
+          (apigee-environment nil)
+          (apigee-verbose-logging nil)
+          (apigee--recently-used-asset-homes nil))
+      ;; An old-format file: string names, and an obsolete variable name.
+      (apigee-tests--write (file-name-concat dir "apigee-el.dat")
+                           (prin1-to-string '(("apigee-organization" "org-a")
+                                              ("apigee--verbose-logging" t)
+                                              ("apigee--timer-minutes" 99)
+                                              ("not-an-apigee-var" "x"))))
+      (apigee--restore-state)
+      (should (equal apigee-organization "org-a"))
+      (should (eq apigee-verbose-logging t))
+      (should (= apigee-timer-minutes 6))
+      (should-not (boundp 'not-an-apigee-var))
+      (setq apigee-environment "env-b")
+      (apigee--persist-state)
+      (let ((written (with-temp-buffer
+                       (insert-file-contents (file-name-concat dir "apigee-el.dat"))
+                       (read (current-buffer)))))
+        (should (cl-every (lambda (entry) (symbolp (car entry))) written))
+        (should (equal (assq 'apigee-environment written) '(apigee-environment "env-b"))))
+      (setq apigee-organization nil apigee-environment nil)
+      (apigee--restore-state)
+      (should (equal (list apigee-organization apigee-environment) '("org-a" "env-b"))))))
+
 ;;; Byte compilation (1.18, 2.9)
 
-(defconst apigee-tests--max-compile-warnings 8
+(defconst apigee-tests--max-compile-warnings 7
   "Byte-compiler warnings for apigee.el, as of the 2.1/2.2 commit.
 Lower this as review item 2.9 removes them; it should end at 0.")
 

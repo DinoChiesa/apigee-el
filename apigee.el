@@ -84,7 +84,13 @@
 (declare-function yas-minor-mode "yasnippet" (&optional arg))
 (defvar yas-minor-mode)
 
-(defvar apigee-function-cache (make-hash-table :test 'equal)
+(defgroup apigee nil
+  "Create and work with Apigee API proxy and sharedflow bundles."
+  :group 'tools
+  :prefix "apigee-")
+
+(define-obsolete-variable-alias 'apigee-function-cache 'apigee--function-cache "2026-10-26")
+(defvar apigee--function-cache (make-hash-table :test 'equal)
   "Cache for memoizing functions with timeouts.")
 
 (defvar apigee--base-template-dir nil
@@ -93,32 +99,38 @@
 (defvar apigee--recently-used-asset-homes nil
   "a list of directories recently used to store API Proxies.")
 
-(defvar apigee--verbose-logging nil
-  "whether this module should log verbosely into *Messages*. This is an on/off
-variable. Set it to a truthy value to get logging.")
+(define-obsolete-variable-alias 'apigee--verbose-logging 'apigee-verbose-logging "2026-10-26")
+(defcustom apigee-verbose-logging nil
+  "Whether apigee.el logs verbosely into *Messages*."
+  :type 'boolean)
 
-(defvar apigee--timer-minutes 6
-  "length of the interval in minutes between persisting apigee-el settings.")
+(define-obsolete-variable-alias 'apigee--timer-minutes 'apigee-timer-minutes "2026-10-26")
+(defcustom apigee-timer-minutes 6
+  "Interval in minutes between saves of the apigee.el settings file.
+Takes effect when apigee.el is loaded."
+  :type 'natnum)
 
-(defvar apigee-timer nil
-  "cancellable timer, for saving apigee-emacs settings.")
+(define-obsolete-variable-alias 'apigee-timer 'apigee--timer "2026-10-26")
+(defvar apigee--timer nil
+  "Cancellable timer, for saving apigee.el settings.")
 
 (defvar apigee--list-of-vars-to-store-and-restore
-  (list "apigee--verbose-logging" "apigee--recently-used-asset-homes"
-        "apigee--base-template-dir" "apigee-organization"
-        "apigee-environment" "apigee-service-account")
-  "a list of variables to store/restore in the settings file.")
+  '(apigee-verbose-logging apigee--recently-used-asset-homes
+    apigee--base-template-dir apigee-organization
+    apigee-environment apigee-service-account)
+  "Variables stored in, and restored from, the settings file.")
 
 (defvar apigee--settings-file-base-name "apigee-el.dat")
 
-(defvar apigee-xmlschema-validator-home "Apigee-Policy-Schema"
+(defcustom apigee-xmlschema-validator-home "Apigee-Policy-Schema"
   "The directory that holds the Apigee policy schema and validator tool.
 If this is a relative directory, it will be resolved relative to the
 directory containing the apigee.el file.
 You need to have created the venv (in either .venv or venv) and installed
-the prerequisites via `pip install -r requirements.txt`")
+the prerequisites via `pip install -r requirements.txt`"
+  :type 'directory)
 
-(defvar apigee-commands-alist
+(defcustom apigee-commands-alist
   '(
     (import . ("%apigeecli" "apis" "create" "bundle" "-f" "apiproxy" "--name" "%n" "-o" "%o" "--token" "%t"))
     (deploy . ("%apigeecli" "apis" "deploy" "--wait" "--name" "%n" "--ovr" "--org" "%o" "--env" "%e" "%sa_args" "--token" "%t"))
@@ -134,13 +146,17 @@ Each value is one of:
 - a list of command symbols, run in sequence with \"&&\", so a failure
   stops the rest.
 - a string: a shell command line used as-is, except that %KEY is
-  replaced with its (shell-quoted) expansion and %c with \"&&\".")
+  replaced with its (shell-quoted) expansion and %c with \"&&\"."
+  :type '(alist :key-type (symbol :tag "Command")
+                :value-type (choice (repeat :tag "Words" string)
+                                    (repeat :tag "Sequence of commands" symbol)
+                                    (string :tag "Shell command line"))))
 
 ;; To modify one of the above after program starts:
 ;; (setf (alist-get 'lint apigee-commands-alist)
 ;;      "%apigeelint -s . -e %lint-exclusions -f visualstudio.js")
 
-(defvar apigee-programs-alist
+(defcustom apigee-programs-alist
   '(
     (gcloud . "gcloud")
     (apigeecli . "apigeecli")
@@ -157,7 +173,10 @@ file, for example,
   (setf (alist-get 'apigeecli apigee-programs-alist) \"~/.apigeecli/bin/apigeecli\"
         (alist-get 'gcloud apigee-programs-alist) \"~/gcloud-sdk/bin/gcloud\"
     )"
-  )
+  :type '(alist :key-type (symbol :tag "Program key")
+                :value-type (choice (string :tag "Program (and arguments)")
+                                    (repeat :tag "Program and arguments" string)
+                                    (function :tag "Function returning a program"))))
 
 (defvar apigee--gcloud-access-token-cache
   nil
@@ -206,12 +225,20 @@ is filled in last, after the user has had a chance to edit the command."
 ;;    '( "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
 ;;     2 3 nil 2 1 ))
 
-(defvar apigee-organization nil
-  "The organization to use for deployments. apigee.el will prompt if unset.")
-(defvar apigee-environment nil
-  "The environment to use for deployments. apigee.el will prompt if unset.")
-(defvar apigee-service-account nil
-  "The Service Account to use for deployments. The format must be {ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com.")
+(defcustom apigee-organization nil
+  "The organization to use for deployments. apigee.el will prompt if unset."
+  :type '(choice (const :tag "Prompt when needed" nil) string))
+(defcustom apigee-environment nil
+  "The environment to use for deployments. apigee.el will prompt if unset."
+  :type '(choice (const :tag "Prompt when needed" nil) string))
+(defcustom apigee-service-account nil
+  "The service account to use for deployments.
+The format is {ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com, or just
+{ACCOUNT_ID}. \"-\" means deploy without a service account; nil means
+prompt when needed."
+  :type '(choice (const :tag "Prompt when needed" nil)
+                 (const :tag "No service account" "-")
+                 string))
 
 (defvar apigee--load-file-name load-file-name
   "The name from which the Apigee module was loaded.")
@@ -303,8 +330,9 @@ templates/policies. A type with no entry uses the directory name.")
 ")))
 
 
-(defvar apigee-lint-exclusions "TD002,TD007,TD012"
-  "The comma-separated list of plugins to exclude from apigeelint")
+(defcustom apigee-lint-exclusions "TD002,TD007,TD012"
+  "The comma-separated list of plugins to exclude from apigeelint."
+  :type 'string)
 
 (defvar apigee--policy-template-alist nil
   "An alist. For each element, the cons is a policy type name, eg
@@ -598,12 +626,16 @@ init file, keeps it; only unset variables are restored."
             (goto-char (point-min))
             (let ((settings-data (read (current-buffer))))
               (dolist (one-setting settings-data)
-                (let ((setting-name (car one-setting)))
+                ;; Older files name the variables with strings, and some
+                ;; under names that are now obsolete aliases.
+                (let* ((name (car one-setting))
+                       (sym (indirect-variable (if (stringp name) (intern name) name)))
+                       (value (cadr one-setting)))
                   (if (and
-                       (member setting-name apigee--list-of-vars-to-store-and-restore)
-                       (cadr one-setting)
-                       (not (symbol-value (intern setting-name))))
-                      (set (intern setting-name) (cadr one-setting))))))))
+                       (memq sym apigee--list-of-vars-to-store-and-restore)
+                       value
+                       (not (symbol-value sym)))
+                      (set sym value)))))))
       )))
 
 (defun apigee--persist-state ()
@@ -616,8 +648,8 @@ It is expected that this function will be called periodically."
   (setq apigee--recently-used-asset-homes (apigee--fresh-recent-asset-homes t))
   (let ((dat-file-path (apigee--path-to-settings-file))
         (alist-to-write nil))
-    (dolist (setting-name apigee--list-of-vars-to-store-and-restore)
-      (push (list setting-name (eval (intern setting-name))) alist-to-write))
+    (dolist (sym apigee--list-of-vars-to-store-and-restore)
+      (push (list sym (symbol-value sym)) alist-to-write))
     (with-temp-file dat-file-path
       (goto-char (point-min))
       (erase-buffer)
@@ -720,7 +752,7 @@ of templates: the length of the alist, or what COUNT returns for it."
   (let* ((top-level-dir (apigee--join-path-elements apigee--base-template-dir subdir))
          (alist (apigee--sort-by-string-car
                  (mapcar (lambda (entry)
-                           (and apigee--verbose-logging (message "%s template %s" label entry))
+                           (and apigee-verbose-logging (message "%s template %s" label entry))
                            (funcall make-entry entry))
                          (funcall list-entries top-level-dir)))))
     (set sym alist)
@@ -1140,13 +1172,13 @@ Uses a counter, so the name is unused in POLICIES-DIR.
         (lexically-bound-fn fn))
     (lambda (&rest args)
       (let* ((key (cons lexically-bound-fn args))
-             (entry (gethash key apigee-function-cache))
+             (entry (gethash key apigee--function-cache))
              (now (current-time)))
         (if (and entry
                  (<= (float-time (time-subtract now (cdr entry))) timeout))
             (car entry) ; Return cached value
           (let ((result (apply lexically-bound-fn args)))
-            (puthash key (cons result now) apigee-function-cache) ; Update cache
+            (puthash key (cons result now) apigee--function-cache) ; Update cache
             result))))))
 
 (define-obsolete-function-alias 'apigee-gcloud-auth-print-access-token
@@ -2194,10 +2226,10 @@ WANT-PROMPT - whether invoked with a prefix
      (if apigee--base-template-dir
          (apigee-load-templates apigee--base-template-dir))
      ;; Reloading the file must not start a second timer.
-     (when (timerp apigee-timer)
-       (cancel-timer apigee-timer))
-     (setq apigee-timer
-      (run-with-timer (* 60 apigee--timer-minutes) (* 60 apigee--timer-minutes) 'apigee--persist-state))
+     (when (timerp apigee--timer)
+       (cancel-timer apigee--timer))
+     (setq apigee--timer
+      (run-with-timer (* 60 apigee-timer-minutes) (* 60 apigee-timer-minutes) 'apigee--persist-state))
      ;; Also save on exit, so changes since the last timer run are kept.
      (add-hook 'kill-emacs-hook #'apigee--persist-state)))
 
