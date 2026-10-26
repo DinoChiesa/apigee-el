@@ -1998,16 +1998,52 @@ from the copies."
     (dolist (file (directory-files-recursively directory regexp))
       (delete-file file))))
 
-(defun apigee--xml-set-attribute (node attr value)
-  "Set attribute ATTR of xml.el NODE to VALUE, adding it if absent."
-  (if-let* ((cell (assq attr (xml-node-attributes node))))
-      (setcdr cell value)
-    (setcar (cdr node) (cons (cons attr value) (xml-node-attributes node)))))
+(defun apigee--xml-text-goto-root ()
+  "Move point to just after the name of the root element's start tag.
+Skips the XML declaration, processing instructions, comments and a
+DOCTYPE. Return the element name."
+  (goto-char (point-min))
+  (let (name)
+    (while (not name)
+      (unless (search-forward "<" nil t)
+        (error "[apigee] no root element in %s" (buffer-name)))
+      (cond
+       ((looking-at-p "!--") (search-forward "-->"))
+       ((looking-at-p "[?!]") (search-forward ">"))
+       ((looking-at "[[:alpha:]_][^ \t\n/>]*")
+        (goto-char (match-end 0))
+        (setq name (match-string-no-properties 0)))))
+    name))
 
-(defun apigee--xml-set-text (node text)
-  "Replace the children of xml.el NODE, if non-nil, with the string TEXT."
-  (when node
-    (setcdr (cdr node) (list text))))
+(defun apigee--xml-text-set-root-attribute (attr value)
+  "Set attribute ATTR of the root element in the current buffer to VALUE.
+This edits the text, so the rest of the file keeps its exact formatting.
+An existing attribute keeps its quote character; a missing one is added."
+  (save-excursion
+    (apigee--xml-text-goto-root)
+    (let ((tag-end (save-excursion
+                     (looking-at "\\(?:[^>\"']\\|\"[^\"]*\"\\|'[^']*'\\)*")
+                     (match-end 0)))
+          (escaped (xml-escape-string value)))
+      (if (re-search-forward (concat "[ \t\n]" (regexp-quote attr)
+                                     "[ \t\n]*=[ \t\n]*\\(?:\"\\([^\"]*\\)\"\\|'\\([^']*\\)'\\)")
+                             tag-end t)
+          (replace-match escaped t t nil (if (match-beginning 1) 1 2))
+        (insert " " attr "=\"" escaped "\"")))))
+
+(defun apigee--xml-text-set-element-text (element text)
+  "Set the content of the first ELEMENT in the current buffer to TEXT.
+Handles both <ELEMENT>...</ELEMENT> and <ELEMENT/>, and keeps the start
+tag's attributes. Edits the text, so the rest of the file keeps its
+formatting. Return non-nil if there was an ELEMENT to change."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward
+           (concat "<" (regexp-quote element) "\\(?:[ \t\n][^>]*?\\)?"
+                   "\\(/>\\|>\\(?:.\\|\n\\)*?</" (regexp-quote element) "[ \t\n]*>\\)")
+           nil t)
+      (replace-match (concat ">" (xml-escape-string text) "</" element ">") t t nil 1)
+      t)))
 
 (defun apigee--copy-bundle-template (asset-type asset-name source destination)
   "Copy the ASSET-TYPE template in SOURCE to asset ASSET-NAME in DESTINATION.
@@ -2026,13 +2062,8 @@ are copied, and its :after-copy function, if any, is called. See
     (let ((new-xml-file-name (apigee--join-path-elements dest-bundle-dir (concat asset-name ".xml"))))
       (copy-file (car file-list) new-xml-file-name nil t t nil)
       (with-current-buffer (find-file-noselect new-xml-file-name)
-        (let*
-            ((root (apigee--parse-buffer))
-             (bundle-elt (car root))
-             (display-name-elt (car (xml-get-children bundle-elt 'DisplayName))))
-          (apigee--xml-set-attribute bundle-elt 'name asset-name)
-          (apigee--xml-set-text display-name-elt asset-name)
-          (apigee--serialize-xml-elt root))
+        (apigee--xml-text-set-root-attribute "name" asset-name)
+        (apigee--xml-text-set-element-text "DisplayName" asset-name)
         (save-buffer)))
     (apigee--copy-subdirs (apigee--asset-kind asset-type :subdirs) source-bundle-dir dest-bundle-dir)
     (when-let* ((after-copy (apigee--asset-kind asset-type :after-copy)))
@@ -2046,14 +2077,8 @@ are copied, and its :after-copy function, if any, is called. See
         (error "[apigee] cannot find XML file in %s, in `apigee--set-proxy-basepath'" dest-proxyendpoints-dir))
     (if (= (length file-list) 1)
         (with-current-buffer (find-file-noselect (car file-list))
-          (let*
-              ((root (apigee--parse-buffer))
-               (proxy-endpoint-elt (car root))
-               (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
-               (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
-            (apigee--xml-set-text basepath-elt (concat "/" proxy-name))
-            (apigee--serialize-xml-elt root))
-          (save-buffer 0)))))
+          (when (apigee--xml-text-set-element-text "BasePath" (concat "/" proxy-name))
+            (save-buffer 0))))))
 
 (defun apigee--new-asset-from-template (asset-type asset-name template-alist template-name containing-dir)
   "Non-interactive function to create a new asset from a template.

@@ -224,6 +224,8 @@ Return the apiproxy directory."
       (apigee--new-asset-from-template "proxy" "p2" (list (list "bare" tdir)) "bare" dir)
       (let ((xml (apigee-tests--read (file-name-concat dir "p2" "apiproxy" "p2.xml"))))
         (should (string-match-p "<APIProxy name=\"p2\">" xml))
+        (should (string-match-p "<HTTPProxyConnection/>"
+                                (apigee-tests--read (file-name-concat dir "p2" "apiproxy" "proxies" "default.xml"))))
         (should (string-match-p "<DisplayName>p2</DisplayName>" xml))))))
 
 (ert-deftest apigee-test-new-proxy-from-template ()
@@ -231,13 +233,60 @@ Return the apiproxy directory."
   (apigee-tests--with-temp-dir dir
     (let* ((b (apigee-tests--new-asset "proxy" "zz-test" "loopback" dir))
            (defn (apigee-tests--read (file-name-concat b "zz-test.xml"))))
-      (should (string-match-p "<APIProxy [^>]*name=\"zz-test\"" defn))
+      (should (string-match-p "<APIProxy [^>]*name=[\"']zz-test[\"']" defn))
       (should (string-match-p "<DisplayName>zz-test</DisplayName>" defn))
       (should (string-match-p "<BasePath>/zz-test</BasePath>"
                               (apigee-tests--read (car (apigee--proper-files
                                                         (file-name-concat b "proxies") ".xml"))))))))
 
-;;; XML insertion and the inject command (1.4, 1.5, 1.6)
+;;; Text-based template edits (2.5a)
+
+(defmacro apigee-tests--in-xml (xml &rest body)
+  "Run BODY in a temp buffer holding XML; return the buffer text afterwards."
+  (declare (indent 1))
+  `(with-temp-buffer (insert ,xml) ,@body (buffer-string)))
+
+(ert-deftest apigee-test-2.5a-set-root-attribute ()
+  (should (equal (apigee-tests--in-xml "<A revision='1' name='old'>\n  <B name='x'/>\n</A>"
+                   (apigee--xml-text-set-root-attribute "name" "new"))
+                 "<A revision='1' name='new'>\n  <B name='x'/>\n</A>"))
+  (should (equal (apigee-tests--in-xml "<?xml version=\"1.0\"?>\n<!-- <Decoy name='d'> -->\n<A\n   name=\"old\" x=\"a>b\">t</A>"
+                   (apigee--xml-text-set-root-attribute "name" "n&m"))
+                 "<?xml version=\"1.0\"?>\n<!-- <Decoy name='d'> -->\n<A\n   name=\"n&amp;m\" x=\"a>b\">t</A>"))
+  (should (equal (apigee-tests--in-xml "<A/>" (apigee--xml-text-set-root-attribute "name" "n"))
+                 "<A name=\"n\"/>"))
+  (should (equal (apigee-tests--in-xml "<A xname='q'><B/></A>" (apigee--xml-text-set-root-attribute "name" "n"))
+                 "<A name=\"n\" xname='q'><B/></A>")))
+
+(ert-deftest apigee-test-2.5a-set-element-text ()
+  (should (equal (apigee-tests--in-xml "<A>\n  <D>old</D>\n  <D>second</D>\n</A>"
+                   (should (apigee--xml-text-set-element-text "D" "new")))
+                 "<A>\n  <D>new</D>\n  <D>second</D>\n</A>"))
+  (should (equal (apigee-tests--in-xml "<A><D k='v'/></A>" (apigee--xml-text-set-element-text "D" "x"))
+                 "<A><D k='v'>x</D></A>"))
+  (should (equal (apigee-tests--in-xml "<A><Dx>1</Dx><D>\n multi\n line </D></A>"
+                   (apigee--xml-text-set-element-text "D" "y"))
+                 "<A><Dx>1</Dx><D>y</D></A>"))
+  (should (equal (apigee-tests--in-xml "<A/>" (should-not (apigee--xml-text-set-element-text "D" "z")))
+                 "<A/>")))
+
+(ert-deftest apigee-test-2.5a-copy-is-lossless ()
+  "Copying a template changes only the name, DisplayName and BasePath."
+  (apigee-tests--with-temp-dir dir
+    (let ((tdir (file-name-concat dir "tmpl" "fancy"))
+          (defn "<APIProxy revision='3' name='fancy'>\n    <!-- a comment -->\n    <Description><![CDATA[a < b]]></Description>\n    <DisplayName>fancy</DisplayName>\n</APIProxy>\n")
+          (endpoint "<ProxyEndpoint name='default'>\n  <!-- flows go here -->\n  <PreFlow name='PreFlow'>\n    <Request/>\n  </PreFlow>\n  <HTTPProxyConnection>\n    <BasePath>/fancy</BasePath>\n  </HTTPProxyConnection>\n  <RouteRule name='noroute'/>\n</ProxyEndpoint>\n"))
+      (apigee-tests--write (file-name-concat tdir "apiproxy" "fancy.xml") defn)
+      (apigee-tests--write (file-name-concat tdir "apiproxy" "proxies" "default.xml") endpoint)
+      (apigee--new-asset-from-template "proxy" "p4" (list (list "fancy" tdir)) "fancy" dir)
+      (let ((b (file-name-concat dir "p4" "apiproxy")))
+        (should (equal (apigee-tests--read (file-name-concat b "p4.xml"))
+                       (string-trim (string-replace ">fancy<" ">p4<"
+                                                    (string-replace "name='fancy'" "name='p4'" defn)))))
+        (should (equal (apigee-tests--read (file-name-concat b "proxies" "default.xml"))
+                       (string-trim (string-replace "/fancy" "/p4" endpoint))))))))
+
+;;; XML insertion and the inject command (1.4, 1.5, 1.6, 2.5b)
 
 (ert-deftest apigee-test-1.4-insert-child-before ()
   (let ((no-ws (car (apigee--parse-xml "<PE a=\"1\"><Flows/><Route/></PE>"))))
