@@ -38,6 +38,7 @@
 
 (require 'apigee)
 (require 'xml)
+(apigee-setup)
 
 ;;; Fixtures
 
@@ -864,6 +865,61 @@ Return the parsed ProxyEndpoint element afterwards."
       (setq apigee-organization nil apigee-environment nil)
       (apigee--restore-state)
       (should (equal (list apigee-organization apigee-environment) '("org-a" "env-b"))))))
+
+;;; Load-time side effects (2.7)
+
+(defun apigee-tests--in-fresh-emacs (form)
+  "Evaluate FORM in a fresh `emacs -Q --batch' that has loaded apigee.el.
+`user-emacs-directory' there is a new temp dir. Return FORM's value."
+  (let ((home (make-temp-file "apigee-fresh" t)))
+    (unwind-protect
+        (with-temp-buffer
+          (call-process (expand-file-name invocation-name invocation-directory)
+                        nil t nil "-Q" "--batch"
+                        "--eval" (format "(setq load-path '%S)" load-path)
+                        "--eval" (format "(setq user-emacs-directory %S)" (file-name-as-directory home))
+                        "--eval" (format "(load %S nil t)" (expand-file-name "apigee.el" apigee-tests--dir))
+                        "--eval" (format "(prin1 (list :result %S))" form))
+          (goto-char (point-min))
+          (re-search-forward "^(:result ")
+          (goto-char (match-beginning 0))
+          (plist-get (read (current-buffer)) :result))
+      (delete-directory home t))))
+
+(defconst apigee-tests--side-effects-form
+  '(list (seq-count (lambda (timer) (eq (timer--function timer) 'apigee--persist-state)) timer-list)
+         (and (memq 'apigee--persist-state kill-emacs-hook) t)
+         (and (assq 'apigeelint-visualstudio-error-with-lines compilation-error-regexp-alist-alist) t)
+         (and (memq 'apigeelint-visualstudio-error-no-line compilation-error-regexp-alist) t)
+         (and apigee--proxy-template-alist t))
+  "Timers, exit hook, error regexps and templates set up by apigee.")
+
+(ert-deftest apigee-test-2.7-loading-has-no-side-effects ()
+  (should (equal (apigee-tests--in-fresh-emacs apigee-tests--side-effects-form)
+                 '(0 nil nil nil nil))))
+
+(ert-deftest apigee-test-2.7-commands-run-setup ()
+  "The first command sets everything up, as loading used to (2.7)."
+  (should (equal (apigee-tests--in-fresh-emacs
+                  `(progn (condition-case nil (apigee-lint-asset nil) (user-error nil))
+                          (list apigee--setup-done ,apigee-tests--side-effects-form)))
+                 '(t (1 t t t t)))))
+
+(ert-deftest apigee-test-2.7-unload-undoes-setup ()
+  (should (equal (apigee-tests--in-fresh-emacs
+                  `(progn (apigee-setup)
+                          (unload-feature 'apigee t)
+                          ;; Its variables are gone now, so leave out the templates check.
+                          (list ,(butlast apigee-tests--side-effects-form)
+                                (file-exists-p (expand-file-name "apigee-el.dat" user-emacs-directory)))))
+                 '((0 nil nil nil) t))))
+
+(ert-deftest apigee-test-2.7-setup-is-idempotent ()
+  (let ((apigee--setup-done nil))
+    (apigee-setup)
+    (apigee-setup))
+  (should (= 1 (seq-count (lambda (timer) (eq (timer--function timer) 'apigee--persist-state))
+                          timer-list))))
 
 ;;; Byte compilation (1.18, 2.9)
 

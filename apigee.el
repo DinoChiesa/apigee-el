@@ -201,23 +201,29 @@ is filled in last, after the user has had a chance to edit the command."
 ;;(add-to-list 'apigee-placeholders-alist '(lint-exclusions . apigee-get-lint-exclusions))
 
 
-(add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
-(add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
-(add-to-list 'compilation-error-regexp-alist-alist
-             '(apigeelint-visualstudio-error-with-lines
-               "^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
-               2 3 4 2 1 ))
+(defconst apigee--compilation-error-symbols
+  '(apigeelint-visualstudio-error-with-lines apigeelint-visualstudio-error-no-line)
+  "Entries that `apigee-setup' adds to `compilation-error-regexp-alist'.")
 
-;; to modify:
-;; (setf
-;;  (alist-get 'apigeelint-visualstudio-error-with-lines compilation-error-regexp-alist-alist)
-;;    '("^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
-;;     2 3 4 2 1 ))
+(defun apigee--register-compilation-error-regexps ()
+  "Teach compilation mode the apigeelint visualstudio output format."
+  (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-with-lines)
+  (add-to-list 'compilation-error-regexp-alist 'apigeelint-visualstudio-error-no-line)
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(apigeelint-visualstudio-error-with-lines
+                 "^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
+                 2 3 4 2 1 ))
 
-(add-to-list 'compilation-error-regexp-alist-alist
-             '(apigeelint-visualstudio-error-no-line
-               "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
-               2 3 nil 2 1 ))
+  ;; to modify:
+  ;; (setf
+  ;;  (alist-get 'apigeelint-visualstudio-error-with-lines compilation-error-regexp-alist-alist)
+  ;;    '("^\\(\\([^ \n]+\\)(\\([0-9]+\\),\\([0-9]+\\))\\): \\(.+\\)$"
+  ;;     2 3 4 2 1 ))
+
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(apigeelint-visualstudio-error-no-line
+                 "^\\(\\([^ \n]+\\)(\\(0\\)\\)): \\(.+\\)$"
+                 2 3 nil 2 1 )))
 
 ;; to modify:
 ;; (setf
@@ -604,6 +610,7 @@ Unlike a global redefinition, this affects only apigee's own XML calls."
 exclude from apigeelint. Uses a cached value, or, if WANT-PROMPT, will
 prompt the user."
   (interactive "P")
+  (apigee-setup)
   (apigee--get-or-prompt 'apigee-lint-exclusions "exclusions" want-prompt))
 
 
@@ -861,6 +868,7 @@ when both are empty, never the empty string."
   "Returns the org to use for import and deployment. Uses a cached
 value, or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
+  (apigee-setup)
   (let ((org (apigee--get-or-prompt 'apigee-organization "organization name" want-prompt)))
     (when (apigee--blank-p org)
       (user-error "[apigee] An organization name is required"))
@@ -870,6 +878,7 @@ value, or, if WANT-PROMPT, will prompt the user."
   "Returns the environment to use for deployment. Uses a cached value,
 or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
+  (apigee-setup)
   (let ((env (apigee--get-or-prompt 'apigee-environment "environment name" want-prompt)))
     (when (apigee--blank-p env)
       (user-error "[apigee] An environment name is required"))
@@ -889,6 +898,7 @@ like any other value, so it is not asked again.
 
 Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
   (interactive "P")
+  (apigee-setup)
   (let ((sa-local (apigee--get-or-prompt 'apigee-service-account "service account" want-prompt))
         (no-sa-p (lambda (sa) (or (apigee--blank-p sa) (equal sa "-")))))
     (when (and (not (funcall no-sa-p sa-local)) (not (string-search "@" sa-local)))
@@ -976,6 +986,7 @@ Based on file availability in TARGETS-DIR."
   "Invoke this interactively, and the fn will prompt the user to
 choose a target type to insert."
   (interactive)
+  (apigee-setup)
   (apigee--require-apiproxy "Adding a target")
   (let ((bundle (apigee--require-bundle))
         (template-name
@@ -1404,6 +1415,7 @@ Used as a predicate for `save-some-buffers'."
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy or sharedflow."
+  (apigee-setup)
   (if-let* ((bundle-dir (plist-get (apigee--bundle) :root)))
       (if-let* ((bundle-name (apigee--bundle-name))
                 ;; When the user will edit the command, the token is filled in
@@ -1540,6 +1552,7 @@ from a template that doesn't send back a revision header.
 
 Running it again on a proxy that already has the logic changes nothing."
   (interactive)
+  (apigee-setup)
   (apigee--require-apiproxy "Injecting the revision logic")
   (let* ((bundle (apigee--require-bundle))
          (bundle-type (plist-get bundle :type)))
@@ -1720,6 +1733,7 @@ into the policy file. It then will open any resource files as
 appropriate.
 "
   (interactive)
+  (apigee-setup)
   (let* ((bundle (apigee--require-bundle))
          (bundle-dir (plist-get bundle :root))
          (bundle-type (plist-get bundle :type))
@@ -1816,6 +1830,7 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
 (defun apigee-rename-policy ()
   "Rename a policy to a new name"
   (interactive)
+  (apigee-setup)
   (let* ((bundle (apigee--require-bundle))
          (current-policies (apigee--list-policies bundle))
          (predicate-ignored nil)
@@ -2185,6 +2200,7 @@ ASSET-TYPE - either \"proxy\" or \"sharedflow\"
 WANT-PROMPT - whether invoked with a prefix
 
 "
+  (apigee-setup)
   (let ((alist-sym (apigee--asset-kind asset-type :templates)))
     (let ((asset-name
            (apigee--require-input
@@ -2206,32 +2222,59 @@ WANT-PROMPT - whether invoked with a prefix
       (apigee--new-asset-from-template asset-type asset-name (symbol-value alist-sym) template containing-dir))))
 
 
-;; restore last known state, and set a timer to persist state periodically
-(eval-after-load "apigee"
-  '(progn
+;; 20250527-1829 - no longer using popup.
+;; ;; override the impl in popup.el - it's broken for me for cascaded menus - 20230627-1541
+;; (defun popup-child-point (popup &optional offset)
+;;   (overlay-end
+;;    (popup-line-overlay popup (popup-selected-line popup))))
 
-     ;; 20250527-1829 - no longer using popup.
-     ;; ;; override the impl in popup.el - it's broken for me for cascaded menus - 20230627-1541
-     ;; (defun popup-child-point (popup &optional offset)
-     ;;   (overlay-end
-     ;;    (popup-line-overlay popup (popup-selected-line popup))))
+;;      ;; customize the popup font
+;; (set-face-attribute 'popup-menu-face nil :height 105)
+;; (set-face-attribute 'popup-menu-selection-face nil :height 105)
 
-     ;;      ;; customize the popup font
-     ;; (set-face-attribute 'popup-menu-face nil :height 105)
-     ;; (set-face-attribute 'popup-menu-selection-face nil :height 105)
+(defvar apigee--setup-done nil
+  "Non-nil once `apigee-setup' has run.")
 
-     (apigee--restore-state)
-     (if (not apigee--base-template-dir)
-         (setq apigee--base-template-dir (concat (file-name-directory apigee--load-file-name) "templates/")))
-     (if apigee--base-template-dir
-         (apigee-load-templates apigee--base-template-dir))
-     ;; Reloading the file must not start a second timer.
-     (when (timerp apigee--timer)
-       (cancel-timer apigee--timer))
-     (setq apigee--timer
-      (run-with-timer (* 60 apigee-timer-minutes) (* 60 apigee-timer-minutes) 'apigee--persist-state))
-     ;; Also save on exit, so changes since the last timer run are kept.
-     (add-hook 'kill-emacs-hook #'apigee--persist-state)))
+(defun apigee-setup ()
+  "Set up apigee.el. Loading the file has no side effects; this does them.
+Restore the saved settings, load the templates, teach compilation mode
+the apigeelint output format, and save the settings every
+`apigee-timer-minutes' and when Emacs exits.
+
+Every apigee command calls this first, so there's no need to call it
+yourself, though you can, e.g. to load the templates early. Calling it
+again does nothing. `unload-feature' undoes it."
+  (interactive)
+  (unless apigee--setup-done
+    (apigee--register-compilation-error-regexps)
+    ;; restore last known state, and set a timer to persist state periodically
+    (apigee--restore-state)
+    (if (not apigee--base-template-dir)
+        (setq apigee--base-template-dir (concat (file-name-directory apigee--load-file-name) "templates/")))
+    (if apigee--base-template-dir
+        (apigee-load-templates apigee--base-template-dir))
+    (when (timerp apigee--timer)
+      (cancel-timer apigee--timer))
+    (setq apigee--timer
+          (run-with-timer (* 60 apigee-timer-minutes) (* 60 apigee-timer-minutes) 'apigee--persist-state))
+    ;; Also save on exit, so changes since the last timer run are kept.
+    (add-hook 'kill-emacs-hook #'apigee--persist-state)
+    (setq apigee--setup-done t)))
+
+(defun apigee-unload-function ()
+  "Undo `apigee-setup', when `unload-feature' unloads apigee.
+Saves the settings first. Returns nil, so normal unloading continues."
+  (when apigee--setup-done
+    (apigee--persist-state))
+  (when (timerp apigee--timer)
+    (cancel-timer apigee--timer))
+  (remove-hook 'kill-emacs-hook #'apigee--persist-state)
+  (setq compilation-error-regexp-alist
+        (seq-difference compilation-error-regexp-alist apigee--compilation-error-symbols))
+  (setq compilation-error-regexp-alist-alist
+        (seq-remove (lambda (entry) (memq (car entry) apigee--compilation-error-symbols))
+                    compilation-error-regexp-alist-alist))
+  nil)
 
 (provide 'apigee)
 
