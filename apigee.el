@@ -77,6 +77,13 @@
 (require 'dash) ;; magnars' functional lib, functions start with dash
 (require 'cl-lib) ; For assoc-if
 
+;; Declared special so that `let' binds them dynamically even when this file
+;; is byte-compiled, matching how they behave when it is loaded from source.
+(defvar tramp-connection-properties)
+(defvar tramp-default-remote-shell)
+(defvar tramp-encoding-shell)
+(defvar comint-last-output-start)
+
 (defvar apigee-function-cache (make-hash-table :test 'equal)
   "Cache for memoizing functions with timeouts.")
 
@@ -574,22 +581,29 @@ Within each of those, there will be templates for those entities."
                top-level-dir))))
 
 (defun apigee--read-or-default (prompt-label default-val)
+  "Prompt with PROMPT-LABEL, pre-filling DEFAULT-VAL if it is not blank.
+Return the input, or DEFAULT-VAL if the input is empty. Return nil only
+when both are empty, never the empty string."
   (let ((response-val
-         (if (or (not default-val) (s-blank? default-val))
+         (if (s-blank? default-val)
              (read-string (format "%s: " prompt-label))
            (read-string (format "%s (%s): " prompt-label default-val)
                         default-val))))
-    (or response-val default-val)))
+    (if (string-empty-p response-val)
+        (and (not (s-blank? default-val)) default-val)
+      response-val)))
 
 (defun apigee-get-organization (&optional want-prompt)
   "Returns the org to use for import and deployment. Uses a cached
 value, or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
   (let ((org-local
-         (if (or want-prompt (not apigee-organization))
+         (if (or want-prompt (s-blank? apigee-organization))
              (apigee--read-or-default "organization name"
                                       apigee-organization)
            apigee-organization)))
+    (when (s-blank? org-local)
+      (user-error "[apigee] An organization name is required"))
     (setq apigee-organization org-local)))
 
 (defun apigee-get-environment (&optional want-prompt)
@@ -597,10 +611,12 @@ value, or, if WANT-PROMPT, will prompt the user."
 or, if WANT-PROMPT, will prompt the user."
   (interactive "P")
   (let ((env-local
-         (if (or want-prompt (not apigee-environment))
+         (if (or want-prompt (s-blank? apigee-environment))
              (apigee--read-or-default "environment name"
                                       apigee-environment)
            apigee-environment)))
+    (when (s-blank? env-local)
+      (user-error "[apigee] An environment name is required"))
     (setq apigee-environment env-local)))
 
 (defun apigee-get-service-account-args-for-deployment (&optional want-prompt)
@@ -608,26 +624,28 @@ or, if WANT-PROMPT, will prompt the user."
 service account. Uses a cached value, or, if WANT-PROMPT, will
 prompt the user. The format of the service account must be
 {ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com . If the format is just
-the short version, this fn will append the PROJECT and suffix.
+the short version, this fn will append the PROJECT and suffix, using the
+Apigee organization name as the PROJECT. That holds for Apigee X and
+hybrid, where the organization is named after its GCP project.
 
-Returns the string representing the full email of the service
-account, or nil, the latter implying do not deploy with a service
-account."
+Enter \"-\" to deploy without a service account. That choice is stored
+like any other value, so it is not asked again.
+
+Returns \"--sa EMAIL\", or the empty string for no service account."
   (interactive "P")
   (let ((sa-local
          (if (or want-prompt (not apigee-service-account))
              (apigee--read-or-default "service account"
                                       apigee-service-account)
-           apigee-service-account)))
-    (when (equal sa-local "-") ;; this means use no SA
-      (setq sa-local nil))
-    (when (and (not (s-blank? sa-local)) (not (s-contains? "@" sa-local)))
+           apigee-service-account))
+        (no-sa-p (lambda (sa) (or (s-blank? sa) (equal sa "-")))))
+    (when (and (not (funcall no-sa-p sa-local)) (not (s-contains? "@" sa-local)))
       ;; user provided short form; append the boilerplate suffix.
       (setq sa-local (format "%s@%s.iam.gserviceaccount.com" sa-local (apigee-get-organization) )))
     (setq apigee-service-account sa-local) ;; for next time, and for persistence
-    (if (not (s-blank? sa-local))
-        (format "--sa %s" sa-local)
-      "")))
+    (if (funcall no-sa-p sa-local)
+        ""
+      (format "--sa %s" sa-local))))
 
 (defun apigee--trim-xml-suffix (s)
   "trims the .xml suffix from a template file name"
@@ -689,6 +707,11 @@ If not in a bundle, then it returns....nil
           (car (cl-some 'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))))
     (and path (file-truename path))))
 
+(defun apigee--require-bundle ()
+  "Return the root of the current bundle, or signal a `user-error'."
+  (or (apigee--root-path-of-bundle)
+      (user-error "[apigee] You do not appear to be in an API proxy or sharedflow directory")))
+
 (defun apigee--target-name-is-available (tname)
   "is a target by this name available? Eg, does a file NOT exist with this name?"
   (let ((filename-to-check
@@ -711,15 +734,18 @@ Based on file availability."
   "Invoke this interactively, and the fn will prompt the user to
 choose a target type to insert."
   (interactive)
-  (let ((apiproxy-dir (apigee--root-path-of-bundle))
+  (apigee--require-apiproxy "Adding a target")
+  (let ((apiproxy-dir (apigee--require-bundle))
         (template-name
          (completing-read
           "target template: "
           (dc-ss/completion-fn
            (mapcar (lambda (x) (car x)) apigee--target-template-alist)
            'sorted-sanely)
-          nil nil nil)))
-    (when template-name
+          nil t nil)))
+    (progn
+      (when (string-empty-p template-name)
+        (user-error "[apigee] No target template chosen"))
       (let ((target-dir (concat apiproxy-dir "apiproxy/targets/"))
             (have-name nil)
             (target-name-prompt "target name: ")
@@ -804,11 +830,10 @@ Returns the path of selected items as a list of strings, or nil if aborted."
                                                (dc-ss/completion-fn effective-options 'sorted-sanely)
                                                nil t)))
 
-          (unless raw-selection ; User aborted (e.g., C-g)
-            (message "Selection aborted.")
-            (cl-return-from my-select-cascaded-choices nil))
-
           (cond
+           ;; Empty input (RET with nothing typed): ask again at this level.
+           ((string-empty-p raw-selection) nil)
+
            ((equal raw-selection "<Back>")
             (pop selected-path)
             (pop history-of-data-levels) ; Remove current level's data from history
@@ -841,13 +866,9 @@ available choices is the hierarchical list of available policies."
 
 
 (defun apigee--is-existing-directory (dir-name)
-  "Tests to see whether a name refers to an existing directory."
-  (and
-   (file-exists-p dir-name)
-   (let ((attrs (file-attributes dir-name)))
-     (and
-      (car attrs)
-      (not (stringp (car attrs)))))))
+  "Tests to see whether a name refers to an existing directory.
+A symbolic link to a directory counts."
+  (file-directory-p dir-name))
 
 (defun apigee--fixup-script-name (name &optional prefix)
   "returns a stripped name suitable for use for a file in the resources/jsc directory,
@@ -1005,6 +1026,14 @@ only for API proxies."
   (when (equal (apigee--type-of-bundle) "sharedflowbundle")
     (user-error "[apigee] %s supports only API proxies, not sharedflows" action)))
 
+(defun apigee--substitute-placeholder (key value template)
+  "Replace each %KEY in TEMPLATE with VALUE, taken literally.
+%KEY must not be followed by a name character, so %t does not match the
+start of %token."
+  (replace-regexp-in-string
+   (concat "\\(%" (regexp-quote (symbol-name key)) "\\)\\(?:[^[:alnum:]_-]\\|\\'\\)")
+   value template t t 1))
+
 (defun apigee--replace-placeholder (want-prompt)
   "used in seq-reduce. I defined this in a formal fn rather
 than a lambda to avoid edebug issues."
@@ -1021,32 +1050,41 @@ than a lambda to avoid edebug issues."
                          (symbol-value replacer-fn))
                         (t nil)))
                  (replacement (funcall callable-fn want-prompt)))
-                (replace-regexp-in-string replaceable replacement acc)
+                (apigee--substitute-placeholder key replacement acc)
               acc)
           acc)))))
 
+(defun apigee--find-executable (name)
+  "Return the executable NAME as a shell-quoted absolute path, or nil.
+A NAME with a directory part is checked directly; otherwise it is looked
+up with `executable-find'."
+  (when-let* ((path (if (file-name-directory name)
+                        (let ((expanded (expand-file-name name)))
+                          (and (file-executable-p expanded)
+                               (not (file-directory-p expanded))
+                               expanded))
+                      (executable-find name))))
+    (shell-quote-argument path)))
+
 (defun apigee--resolve-program (pgm-arg)
-  "Resolve the program. PGM-ARG is either a funciton, a list, or a string.
+  "Resolve the program. PGM-ARG is either a function, a list, or a string.
 If a function, then invoke it and take the string value of
 that. If a list, resolve the first arg as an executable and then concatenate
-that with the remaining args. Otherwise resolve PGM-ARG as an executable."
+that with the remaining args. If a string, resolve it as an executable; a
+path with spaces works. Failing that, treat the first word as the
+executable and the rest as arguments. Return nil if the executable can't
+be found."
   (cond
    ((functionp pgm-arg)
     (funcall pgm-arg))
-   ((listp pgm-arg)
-    (let* ((executable (car pgm-arg))
-           (resolved-executable (executable-find executable)))
-      (when resolved-executable
-        (s-join " " (cons resolved-executable (cdr pgm-arg))))))
-
-   (t
-    (if-let* ((all-args (split-string pgm-arg " ")) ;; in case there is a space
-              (first-arg (nth 0 all-args)))
-        (if (and (file-name-directory first-arg)
-                 (file-exists-p first-arg) (file-executable-p first-arg))
-            pgm-arg ;; no need to resolve anything
-          (mapconcat 'identity (cons (executable-find first-arg) (cdr all-args)) " "))
-      (error (format "cannot resolve program '%s'" pgm-arg))))))
+   ((consp pgm-arg)
+    (when-let* ((executable (apigee--find-executable (car pgm-arg))))
+      (string-join (cons executable (cdr pgm-arg)) " ")))
+   ((stringp pgm-arg)
+    (or (apigee--find-executable pgm-arg)
+        (let ((words (split-string pgm-arg " " t)))
+          (when-let* ((executable (and words (apigee--find-executable (car words)))))
+            (string-join (cons executable (cdr words)) " ")))))))
 
 
 
@@ -1063,7 +1101,7 @@ called, returns the program name/path string."
           (let ((resolved-pgm (apigee--resolve-program program-val)))
             (if (not resolved-pgm)
                 (error (format "cannot resolve program '%s'" program-val)))
-            (replace-regexp-in-string replaceable resolved-pgm acc)))
+            (apigee--substitute-placeholder key resolved-pgm acc)))
       acc)))
 
 (defun apigee--get-command (symbol want-prompt)
@@ -1079,33 +1117,53 @@ current API proxy."
       (let ((replacer (apigee--replace-placeholder want-prompt)))
         (seq-reduce replacer apigee-placeholders-alist cmd)))))
 
-(defun apigee--mask-secrets ()
-  "Intended for use in `compilation-filter-hook'."
+(defconst apigee--token-arg-regexp "--token \\([^ \n]+\\)"
+  "Matches a --token argument and its value.")
+
+(defconst apigee--masked-token-arg "--token ***masked***"
+  "Replacement text for a --token argument.")
+
+(defun apigee--mask-tokens-from (start)
+  "Mask --token arguments in the current buffer from START to the end."
   (save-excursion
     (let ((inhibit-read-only t))
-      (goto-char (point-min))
-      (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-        (replace-match "--token ***masked***")))))
+      (goto-char start)
+      (while (re-search-forward apigee--token-arg-regexp nil t)
+        (replace-match apigee--masked-token-arg t t)))))
+
+(defun apigee--mask-secrets (&rest _)
+  "Mask tokens in the newest process output.
+For buffer-local use in `comint-output-filter-functions'. The apigee
+commands run `compilation-start' in comint mode, where
+`compilation-filter-hook' never runs. Rescanning from the start of the
+line catches a token split across two output chunks."
+  (apigee--mask-tokens-from
+   (save-excursion (goto-char comint-last-output-start) (line-beginning-position))))
+
+(defun apigee--mask-command-echo (&rest _)
+  "Mask tokens in the whole buffer, including the echoed command line.
+For buffer-local use in `compilation-start-hook', so that a recompile
+is masked too."
+  (apigee--mask-tokens-from (point-min)))
+
+;; Survive `kill-all-local-variables', e.g. when the user recompiles with g.
+(put 'apigee--mask-secrets 'permanent-local-hook t)
+(put 'apigee--mask-command-echo 'permanent-local-hook t)
 
 (defun apigee--mask-token (unmasked-cmd)
   "Masks tokens in a command. See also
  `apigee--reinsert-token'"
-  (replace-regexp-in-string "--token \\([^ \n]+\\)"  "--token ***masked***" unmasked-cmd))
+  (replace-regexp-in-string apigee--token-arg-regexp apigee--masked-token-arg unmasked-cmd t t))
 
 (defun apigee--reinsert-token (masked-cmd)
   "Re-inserts tokens into a masked command. See also
  `apigee--mask-token'"
   (let ((callable-fn
          (symbol-value 'apigee--memoized-gcloud-pat)))
-    (replace-regexp-in-string  "--token \\*\\*\\*masked\\*\\*\\*"
-                               (concat "--token " (funcall callable-fn nil))
-                               masked-cmd)))
+    (replace-regexp-in-string (regexp-quote apigee--masked-token-arg)
+                              (concat "--token " (funcall callable-fn nil))
+                              masked-cmd t t)))
 
-
-(defun apigee--remove-compilation-filter-hook ()
-  (remove-hook 'compilation-filter-hook 'apigee--mask-secrets))
-
-(add-hook 'compilation-filter-hook 'apigee--mask-secrets)
 
 (defun apigee--has-same-bundle-root (root-dir-in-question)
   "predicate called in each unsaved buffer.  Returns t if the buffer
@@ -1164,7 +1222,6 @@ Returns nil if no such item is found."
                  (let (
                        ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
                        ;; Not sure which, if any, are required here.
-                       (compilation-shell-name  "/bin/bash")
                        (tramp-default-remote-shell "/bin/bash")
                        (tramp-encoding-shell "/bin/bash"))
                    (let* ((actual-command-to-run
@@ -1184,11 +1241,10 @@ Returns nil if no such item is found."
                             actual-command-to-run
                             t name-function highlight-regexp)))
                      (with-current-buffer buf
-                       ;; obscure any token that appears
-                       (save-excursion
-                         (beginning-of-buffer)
-                         (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-                           (replace-match "--token ***masked***")))
+                       ;; obscure any token that appears, now and in later output
+                       (apigee--mask-tokens-from (point-min))
+                       (add-hook 'comint-output-filter-functions #'apigee--mask-secrets nil t)
+                       (add-hook 'compilation-start-hook #'apigee--mask-command-echo nil t)
                        (setq buffer-read-only t))))))))
         (error "Can't find bundle name, or can't resolve command."))
     (error "You do not appear to be in an API proxy or sharedflow directory.")))
@@ -1443,7 +1499,7 @@ into the policy file. It then will open any resource files as
 appropriate.
 "
   (interactive)
-  (let ((bundle-dir (apigee--root-path-of-bundle))
+  (let ((bundle-dir (apigee--require-bundle))
         (bundle-type (apigee--type-of-bundle))
         (choice (apigee--prompt-user-with-policy-choices)))
     (when choice ;; is a cons cell
@@ -1500,9 +1556,12 @@ appropriate.
 (defun apigee--is-policy-file (s)
   "returns true if the filename represents a policy file in the current
 proxy/sharedflow bundle"
-  (and
-   (s-starts-with? (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/") s)
-   (file-exists-p s)))
+  (when-let* ((s)
+              (bundle-root (apigee--root-path-of-bundle)))
+    (and (file-exists-p s)
+         ;; The bundle root is a truename, so compare against S's truename.
+         (s-starts-with? (concat bundle-root (apigee--type-of-bundle) "/policies/")
+                         (file-truename s)))))
 
 (defun apigee--current-policy-name ()
   "returns the name of the current policy, if the current buffer
