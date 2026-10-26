@@ -1295,27 +1295,19 @@ from a template that doesn't send back a revision header."
                         (mapcar (lambda (s) (car (apigee--parse-xml (concat "  <Step>\n    <Name>" s  "</Name>\n  </Step>"))))
                                 policy-names)))
 
-                    (if (not preflow-elt)
-                        ;; insert PreFlow node, try one of various locations.
-                        (let ((position-index
-                               (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-                                      '(PostFlow PostClientFlow Flows DefaultFaultRule FaultRules)))
-                              (new-preflow-elt
-                               (car (apigee--parse-xml "<PreFlow><Request/><Response/></PreFlow>"))))
-                          ;; insert before the selected element
-                          (push new-preflow-elt (cdr (nthcdr position-index proxy-endpoint-elt)))
-                          (setq preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))))
+                    (unless preflow-elt
+                      ;; insert PreFlow node, try one of various locations.
+                      (setq preflow-elt (car (apigee--parse-xml "<PreFlow><Request/><Response/></PreFlow>")))
+                      (apigee--xml-insert-child-before
+                       proxy-endpoint-elt preflow-elt
+                       '(PostFlow PostClientFlow Flows DefaultFaultRule FaultRules)))
 
-                    (if (not postflow-elt)
-                        ;; insert PostFlow node, try one of various locations.
-                        (let ((position-index
-                               (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-                                      '(PostClientFlow Flows PreFlow DefaultFaultRule FaultRules)))
-                              (new-postflow-elt
-                               (car (apigee--parse-xml "<PostFlow><Request/><Response/></PostFlow>"))))
-                          ;; insert before the selected element
-                          (push new-postflow-elt (cdr (nthcdr position-index proxy-endpoint-elt)))
-                          (setq postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))))
+                    (unless postflow-elt
+                      ;; insert PostFlow node, try one of various locations.
+                      (setq postflow-elt (car (apigee--parse-xml "<PostFlow><Request/><Response/></PostFlow>")))
+                      (apigee--xml-insert-child-before
+                       proxy-endpoint-elt postflow-elt
+                       '(PostClientFlow Flows PreFlow DefaultFaultRule FaultRules)))
 
                     (if preflow-elt
                         (let* ((preflow-response-elt (car (xml-get-children preflow-elt 'Response))))
@@ -1345,16 +1337,13 @@ from a template that doesn't send back a revision header."
                                   (cons "\n    " (list (car step-references))))))
 
 
-                    (if (not default-faultrule-elt)
-                        ;; insert DefaultFaultRule node. As above, try one of various locations.
-                        (let ((position-index
-                               (-some (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-                                      '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
-                              (new-dfr-elt
-                               (car (apigee--parse-xml "<DefaultFaultRule><AlwaysEnforce>true</AlwaysEnforce></DefaultFaultRule>"))))
-                          ;; insert before the selected element
-                          (push new-dfr-elt (cdr (nthcdr position-index proxy-endpoint-elt)))
-                          (setq default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))))
+                    (unless default-faultrule-elt
+                      ;; insert DefaultFaultRule node. As above, try one of various locations.
+                      (setq default-faultrule-elt
+                            (car (apigee--parse-xml "<DefaultFaultRule><AlwaysEnforce>true</AlwaysEnforce></DefaultFaultRule>")))
+                      (apigee--xml-insert-child-before
+                       proxy-endpoint-elt default-faultrule-elt
+                       '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
 
                     (if default-faultrule-elt
                         ;; append the step-references as children to Response
@@ -1365,15 +1354,21 @@ from a template that doesn't send back a revision header."
                   (save-buffer 0)))))))))
 
 
-(defun apigee--xml-locate-first-child-node (node child-name)
-  (let ((n -1)
-        (count))
-    (dolist (child (xml-node-children node))
-      (setq n (+ 1 n))
-      (if (and (listp child)
-               (equal (xml-node-name child) child-name))
-          (setq count n)))
-    count))
+(defun apigee--xml-insert-child-before (node new-child before-names)
+  "Insert NEW-CHILD into the xml.el NODE, before a child named in BEFORE-NAMES.
+BEFORE-NAMES is a preference list of element-name symbols: the first name
+that NODE has a child for decides where NEW-CHILD goes. If NODE has none
+of them, NEW-CHILD becomes its last child."
+  (let ((anchor-name (seq-find (lambda (name) (xml-get-children node name))
+                               before-names))
+        ;; Start at the attributes cell; the children follow it.
+        (cell (cdr node)))
+    (while (and (cdr cell)
+                (not (and anchor-name
+                          (consp (cadr cell))
+                          (eq (xml-node-name (cadr cell)) anchor-name))))
+      (setq cell (cdr cell)))
+    (setcdr cell (cons new-child (cdr cell)))))
 
 ;; (defun apigee--diag-parse ()
 ;;   (interactive)
@@ -1506,6 +1501,27 @@ is visiting a policy file. otherwise nil."
         (mapcar (lambda (s) (s-chop-suffix ".xml" (car (reverse (split-string s "/")))))
                 fq-names))))
 
+(defun apigee--policy-name-char-p (char)
+  "Return non-nil if CHAR can be part of a policy name.
+Period is excluded so that flow variables like ratelimit.Quota-1.allowed
+count as references to the policy Quota-1."
+  (and char (string-match-p "[[:alnum:]_-]" (string char))))
+
+(defun apigee--replace-policy-name-in-buffer (old-name new-name)
+  "Replace each whole occurrence of policy name OLD-NAME with NEW-NAME.
+An occurrence that is part of a longer name is left alone, so renaming
+AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
+  (let ((case-fold-search nil)
+        (replaced nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (search-forward old-name nil t)
+        (unless (or (apigee--policy-name-char-p (char-before (match-beginning 0)))
+                    (apigee--policy-name-char-p (char-after (match-end 0))))
+          (replace-match new-name t t)
+          (setq replaced t))))
+    replaced))
+
 (defun apigee-rename-policy ()
   "Rename a policy to a new name"
   (interactive)
@@ -1532,27 +1548,18 @@ is visiting a policy file. otherwise nil."
                   (fq-new-fname (concat policy-dir new-name ".xml")))
               (message "renaming %s to %s..." name-of-policy-to-rename new-name)
 
-              (let ((re1 (concat "\\<" (regexp-quote name-of-policy-to-rename) "\\>"))
-                    (interactive-buffer-name (buffer-name))
-                    (buf-for-policy-file (get-file-buffer fq-old-fname))
-                    (count-of-changes 0)
-                    (process-one-file (lambda (one-file)
-                                        (with-current-buffer (find-file-noselect one-file)
-                                          (save-excursion
-                                            (goto-char (point-min))
-                                            (let ((made-at-least-one-change nil)
-                                                  (original-modified (buffer-modified-p)))
-                                              (while (re-search-forward re1 nil t)
-                                                (replace-match new-name)
-                                                (setq made-at-least-one-change t))
-
-                                              (if made-at-least-one-change
-                                                  (setq count-of-changes (1+ count-of-changes)))
-
-                                              (if (and made-at-least-one-change
-                                                       (not original-modified)
-                                                       (not (s-equals-p interactive-buffer-name (buffer-name))))
-                                                  (save-buffer))))))))
+              (let* ((interactive-buffer-name (buffer-name))
+                     (buf-for-policy-file (get-file-buffer fq-old-fname))
+                     (count-of-changes 0)
+                     (process-one-file (lambda (one-file)
+                                         (with-current-buffer (find-file-noselect one-file)
+                                           (let ((original-modified (buffer-modified-p)))
+                                             (when (apigee--replace-policy-name-in-buffer
+                                                    name-of-policy-to-rename new-name)
+                                               (setq count-of-changes (1+ count-of-changes))
+                                               (unless (or original-modified
+                                                           (s-equals-p interactive-buffer-name (buffer-name)))
+                                                 (save-buffer))))))))
 
                 ;; rename the file for the policy
                 (rename-file fq-old-fname fq-new-fname)
@@ -1667,32 +1674,26 @@ is visiting a policy file. otherwise nil."
        (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
   (nth 0 file-list))
 
-(defun apigee--copy-subdirs (subdirs source-dir dest-dir)
-  (while subdirs
-    (let* ((this-dir (car subdirs))
-           (source-subdir (apigee--join-path-elements source-dir this-dir))
-           (dest-subdir (apigee--join-path-elements dest-dir this-dir)))
-      (if (apigee--is-existing-directory source-subdir)
-          (copy-directory source-subdir dest-subdir t nil)))
-    (setq subdirs (cdr subdirs))))
+(defconst apigee--editor-temp-file-globs '("#*#" "*~" ".#*")
+  "Globs for Emacs auto-save, backup and lock files.
+These must not be carried from a template into a new bundle.")
 
-(defun apigee--clean-files-from-dirtree (directory filespecs)
-  "Recursively delete files in DIRECTORY matching any pattern in FILESPECS.
-DIRECTORY should be a string path.
-FILESPECS should be a list of strings (e.g., '(\"*.xml\" \"*.js\"))."
-  (interactive "DDirectory: \nxFilespecs (list of strings): ")
-  (let ((delete-count 0))
-    (dolist (spec filespecs)
-      ;; Convert glob pattern (e.g. *.js) to a regex (e.g. \.js$)
-      (let ((regexp (wildcard-to-regexp spec))
-            (files (directory-files-recursively directory "")))
-        (dolist (file files)
-          ;; Check if the base name of the file matches the regex
-          (when (string-match-p regexp (file-name-nondirectory file))
-            (delete-file file)
-            (setq delete-count (1+ delete-count))))))
-    ;;(message "Cleanup complete. Total files removed: %d" delete-count)
-    ))
+(defun apigee--copy-subdirs (subdirs source-dir dest-dir)
+  "Copy each of SUBDIRS that exists in SOURCE-DIR into DEST-DIR.
+Editor temp files, per `apigee--editor-temp-file-globs', are removed
+from the copies."
+  (dolist (subdir subdirs)
+    (let ((source-subdir (apigee--join-path-elements source-dir subdir))
+          (dest-subdir (apigee--join-path-elements dest-dir subdir)))
+      (when (apigee--is-existing-directory source-subdir)
+        (copy-directory source-subdir dest-subdir t nil)
+        (apigee--clean-files-from-dirtree dest-subdir apigee--editor-temp-file-globs)))))
+
+(defun apigee--clean-files-from-dirtree (directory globs)
+  "Recursively delete files in DIRECTORY whose names match any of GLOBS."
+  (let ((regexp (mapconcat #'wildcard-to-regexp globs "\\|")))
+    (dolist (file (directory-files-recursively directory regexp))
+      (delete-file file))))
 
 (defun apigee--copy-proxy-template-files (proxy-name source destination)
   "copy files from the SOURCE template directory to the DESTINATION directory,
@@ -1719,8 +1720,6 @@ changing names and replacing / expanding things as appropriate."
           (save-buffer))))
 
     (apigee--copy-subdirs (list "proxies" "policies" "resources" "targets") source-apiproxy-dir dest-apiproxy-dir)
-    ;; in the destination, remove any emacs-generated temporary files (backups and # files)
-    (apigee--clean-files-from-dirtree dest-apiproxy-dir '("#*.*#" "*.*~"))
 
     ;; if we can find a single XML file in the proxies dir, modify it
     (let* ((dest-proxyendpoints-dir (apigee--join-path-elements dest-apiproxy-dir "proxies"))
@@ -1762,7 +1761,7 @@ changing names and replacing / expanding things as appropriate."
             (setcar (cddr display-name-elt) sf-name)
             (apigee--serialize-xml-elt root))
           (save-buffer))))
-    (apigee--copy-subdirs (list "sharedflows" "policies") source-sf-dir dest-sf-dir)))
+    (apigee--copy-subdirs (list "sharedflows" "policies" "resources") source-sf-dir dest-sf-dir)))
 
 (defun apigee--new-asset-from-template (asset-type asset-name template-alist template-name containing-dir)
   "Non-interactive function to create a new asset from a template.
