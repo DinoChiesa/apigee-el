@@ -10,7 +10,7 @@
 ;; Modified   : May 2025
 ;; Version    : 1.3
 ;; Keywords   : apigee
-;; Requires   : s.el, xml.el
+;; Package-Requires: ((emacs "28.1") (s "1.12.0") (dash "2.18.0") (yasnippet "0.14.0"))
 ;; License    : Apache 2.0
 ;; X-URL      : https://github.com/DinoChiesa/apigee-el
 ;; Last-saved : <2026-February-22 18:28:01>
@@ -71,9 +71,6 @@
 (require 'seq)
 (require 'xml)
 (require 'compile)
-(require 'dc-xml)
-(require 'dc-sane-sorting)
-(require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
 (require 'cl-lib) ; For assoc-if
 
@@ -83,6 +80,11 @@
 (defvar tramp-default-remote-shell)
 (defvar tramp-encoding-shell)
 (defvar comint-last-output-start)
+
+(declare-function yas-expand-snippet "yasnippet" (snippet &optional start end expand-env))
+(declare-function yas-active-snippets "yasnippet" (&optional beg end))
+(declare-function yas-minor-mode "yasnippet" (&optional arg))
+(defvar yas-minor-mode)
 
 (defvar apigee-function-cache (make-hash-table :test 'equal)
   "Cache for memoizing functions with timeouts.")
@@ -320,6 +322,187 @@ string, a file name, containing the target template.")
 entry is a string, a directory name, containing the exploded sharedflow
 template.")
 
+
+(defun apigee--completion-table (candidates)
+  "Return a completion table for CANDIDATES that lists them alphabetically.
+The default minibuffer sort puts short candidates first. The table's
+category is `sorted-sanely', so an entry for that category in
+`completion-category-overrides' still takes precedence."
+  (let ((sort-alphabetically (lambda (cands) (sort (copy-sequence cands) #'string<))))
+    (lambda (string pred action)
+      (if (eq action 'metadata)
+          `(metadata (category . sorted-sanely)
+                     (display-sort-function . ,sort-alphabetically)
+                     (cycle-sort-function . ,sort-alphabetically))
+        (complete-with-action action candidates string pred)))))
+
+(defvar apigee--in-snippet-recursive-edit nil
+  "Non-nil while `apigee--expand-snippet' waits for a snippet to be finished.")
+
+(defun apigee--exit-snippet-recursive-edit ()
+  "End the recursive edit started by `apigee--expand-snippet'.
+For buffer-local use in `yas-after-exit-snippet-hook'."
+  (when apigee--in-snippet-recursive-edit
+    (throw 'exit nil)))
+
+(defun apigee--expand-snippet (content)
+  "Expand CONTENT as a yasnippet snippet at point, and return when it's done.
+If the snippet has fields, wait in a recursive edit until the user has
+filled them in and the snippet exits."
+  (require 'yasnippet)
+  ;; `yas-expand-snippet' refuses to run without the minor mode.
+  (unless yas-minor-mode
+    (yas-minor-mode 1))
+  (add-hook 'yas-after-exit-snippet-hook #'apigee--exit-snippet-recursive-edit nil t)
+  (yas-expand-snippet content (point) (point))
+  (when (yas-active-snippets)
+    (let ((apigee--in-snippet-recursive-edit t))
+      (recursive-edit))))
+
+(defun apigee--xml-parse-tag-1 (&optional parse-dtd parse-ns)
+  "Like `xml-parse-tag-1', but keep XML comments as (nil . \"<!-- ... -->\") nodes.
+Installed only temporarily, by `apigee--with-comment-preserving-xml'."
+  (let* ((xml-validating-parser (or parse-dtd xml-validating-parser))
+         (xml-ns
+          (cond ((eq parse-ns 'symbol-qnames)
+                 (cons 'symbol-qnames xml-default-ns))
+                ((or (consp (car-safe parse-ns))
+                     (and (eq (car-safe parse-ns) 'symbol-qnames)
+                          (listp (cdr parse-ns))))
+                 parse-ns)
+                (parse-ns
+                 xml-default-ns))))
+    (cond
+     ;; Processing instructions
+     ((looking-at-p "<\\?")
+      (search-forward "?>")
+      (skip-syntax-forward " ")
+      (apigee--xml-parse-tag-1 parse-dtd xml-ns))
+     ;; CDATA
+     ((looking-at "<!\\[CDATA\\[")
+      (let ((pos (match-end 0)))
+        (unless (search-forward "]]>" nil t)
+          (error "XML: (Not Well Formed) CDATA section does not end anywhere in the document"))
+        (concat
+         (buffer-substring-no-properties pos (match-beginning 0))
+         (xml-parse-string))))
+     ;; DTD
+     ((looking-at-p "<!DOCTYPE[ \t\n\r]")
+      (let ((dtd (xml-parse-dtd parse-ns)))
+        (skip-syntax-forward " ")
+        (if xml-validating-parser
+            (cons dtd (apigee--xml-parse-tag-1 nil xml-ns))
+          (apigee--xml-parse-tag-1 nil xml-ns))))
+     ;; comment - preserved
+     ((looking-at-p "<!--")
+      (let ((start (point)))
+        (search-forward "-->")
+        (prog1 (cons nil (buffer-substring-no-properties start (point)))
+          (skip-syntax-forward " "))))
+     ;; end tag
+     ((looking-at-p "</")
+      '())
+     ;; opening tag
+     ((looking-at (concat "<\\(" xml-name-re "\\)"))
+      (goto-char (match-end 1))
+      (let* ((node-name (match-string-no-properties 1))
+             (attrs (xml-parse-attlist xml-ns))
+             children)
+        (when (consp xml-ns)
+          (dolist (attr attrs)
+            (when (and (consp (car attr))
+                       (equal "http://www.w3.org/2000/xmlns/" (caar attr)))
+              (push (cons (cdar attr) (cdr attr))
+                    (if (symbolp (car xml-ns))
+                        (cdr xml-ns)
+                      xml-ns)))))
+        (setq children (list attrs (xml-maybe-do-ns node-name "" xml-ns)))
+        (cond
+         ((looking-at-p "/>")
+          (forward-char 2)
+          (nreverse children))
+         ((eq (char-after) ?>)
+          (forward-char 1)
+          (let ((end (concat "</" node-name "\\s-*>")))
+            (while (not (looking-at end))
+              (cond
+               ((eobp)
+                (error "XML: (Not Well-Formed) End of document while reading element `%s'" node-name))
+               ((looking-at-p "</")
+                (forward-char 2)
+                (error "XML: (Not Well-Formed) Invalid end tag `%s' (expecting `%s')"
+                       (let ((pos (point)))
+                         (buffer-substring pos (if (re-search-forward "\\s-*>" nil t)
+                                                   (match-beginning 0)
+                                                 (point-max))))
+                       node-name))
+               ((= (char-after) ?<)
+                (let ((tag (apigee--xml-parse-tag-1 nil xml-ns)))
+                  (when tag
+                    (push tag children))))
+               (t
+                (let ((expansion (xml-parse-string)))
+                  (push (if (stringp (car children))
+                            (concat (pop children) expansion)
+                          expansion)
+                        children))))))
+          (goto-char (match-end 0))
+          (nreverse children))
+         (t
+          (error "XML: (Well-Formed) Couldn't parse tag: %s"
+                 (buffer-substring-no-properties (- (point) 10) (+ (point) 1)))))))
+     (t
+      (unless xml-sub-parser
+        (error "XML: (Well-Formed) Invalid character"))
+      (let ((s (xml-parse-string)))
+        (when (zerop (length s))
+          (error "XML: (Not Well-Formed) Could not parse: %s"
+                 (buffer-substring-no-properties (point) (min (+ (point) 10) (point-max)))))
+        s)))))
+
+(defun apigee--xml-print-internal (xml indent-string)
+  "Like `xml-debug-print-internal', but print (nil . COMMENT) nodes as-is.
+Installed only temporarily, by `apigee--with-comment-preserving-xml'."
+  (let ((tree xml)
+        attlist)
+    (insert indent-string ?< (symbol-name (xml-node-name tree)))
+    (setq attlist (xml-node-attributes tree))
+    (while attlist
+      (insert ?\s (symbol-name (caar attlist)) "=\""
+              (xml-escape-string (cdar attlist)) ?\")
+      (setq attlist (cdr attlist)))
+    (setq tree (xml-node-children tree))
+    (if (null tree)
+        (insert ?/ ?>)
+      (insert ?>)
+      (dolist (node tree)
+        (cond
+         ((listp node)
+          (cond
+           ((not (car node))
+            (insert (cdr node)))
+           (t
+            (insert ?\n)
+            (apigee--xml-print-internal node (concat indent-string "  ")))))
+         ((stringp node)
+          (insert (xml-escape-string node)))
+         (t
+          (error "Invalid XML tree"))))
+      (when (not (and (null (cdr tree)) (stringp (car tree))))
+        (insert ?\n indent-string))
+      (insert ?< ?/ (symbol-name (xml-node-name xml)) ?>))))
+
+(defmacro apigee--with-comment-preserving-xml (&rest body)
+  "Run BODY with xml.el parsing and printing that keep XML comments.
+Unlike a global redefinition, this affects only apigee's own XML calls."
+  `(cl-letf (((symbol-function 'xml-parse-tag-1) #'apigee--xml-parse-tag-1)
+             ((symbol-function 'xml-debug-print-internal) #'apigee--xml-print-internal))
+     ,@body))
+
+(defun apigee--parse-buffer ()
+  "Parse the current buffer as XML, keeping comments."
+  (apigee--with-comment-preserving-xml
+   (xml-parse-region (point-min) (point-max))))
 
 (defun apigee-get-lint-exclusions (&optional want-prompt)
   "get a string representing a comma-separated set of plugins to
@@ -677,13 +860,11 @@ Returns \"--sa EMAIL\", or the empty string for no service account."
         (if r
             (list (mapconcat 'identity r "/") flavor ))))))
 
-(defun apigee--type-of-bundle ()
-  "returns \"apiproxy\" or \"sharedflowbundle\", or nil"
-  (cadr (cl-some 'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))
-
-(defun apigee--root-path-of-bundle ()
-  "Returns the path of the directory that contains the
-apiproxy directory.
+(defun apigee--bundle ()
+  "Return the bundle containing `default-directory', or nil if there is none.
+The value is a plist (:root ROOT :type TYPE). TYPE is \"apiproxy\" or
+\"sharedflowbundle\". ROOT is the truename of the directory that contains
+the bundle directory.
 
 If the apiproxy is defined in a structure like this:
 
@@ -698,35 +879,33 @@ If the apiproxy is defined in a structure like this:
 ..
 
 ... and this function is invoked from anywhere in one of those directories,
-then the return value is: ~/foo/bar/APINAME/
+then ROOT is ~/foo/bar/APINAME/ (expanded). It always ends in slash."
+  (when-let* ((found (cl-some #'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))
+    (list :root (file-truename (apigee--insure-trailing-slash (car found)))
+          :type (cadr found))))
 
-It always ends in slash.
-
-If not in a bundle, then it returns....nil
-"
-  (let ((path
-         (apigee--insure-trailing-slash
-          (car (cl-some 'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))))
-    (and path (file-truename path))))
+(defun apigee--bundle-subdir (bundle &rest subdirs)
+  "Return directory SUBDIRS of BUNDLE's bundle directory, ending in slash.
+With no SUBDIRS, return the bundle directory itself, e.g. ROOT/apiproxy/."
+  (file-name-as-directory
+   (apply #'file-name-concat (plist-get bundle :root) (plist-get bundle :type) subdirs)))
 
 (defun apigee--require-bundle ()
-  "Return the root of the current bundle, or signal a `user-error'."
-  (or (apigee--root-path-of-bundle)
+  "Return the current bundle, as from `apigee--bundle', or signal a `user-error'."
+  (or (apigee--bundle)
       (user-error "[apigee] You do not appear to be in an API proxy or sharedflow directory")))
 
-(defun apigee--target-name-is-available (tname)
-  "is a target by this name available? Eg, does a file NOT exist with this name?"
-  (let ((filename-to-check
-         (concat (apigee--root-path-of-bundle) "apiproxy/targets/" tname ".xml")))
-    (not (file-exists-p filename-to-check))))
+(defun apigee--target-name-is-available (targets-dir tname)
+  "Return non-nil if no target named TNAME exists in TARGETS-DIR."
+  (not (file-exists-p (file-name-concat targets-dir (concat tname ".xml")))))
 
-(defun apigee--suggested-target-name (template-name)
+(defun apigee--suggested-target-name (targets-dir template-name)
   "suggest a name for a target given a TEMPLATE-NAME for the target.
-Based on file availability."
+Based on file availability in TARGETS-DIR."
   (let ((val 1)
         (next-name (lambda (v) (concat template-name "-" (format "%d" v)))))
     (let ((tname (funcall next-name val)))
-      (while (not (apigee--target-name-is-available tname))
+      (while (not (apigee--target-name-is-available targets-dir tname))
         (setq val (1+ val)
               tname (funcall next-name val)))
       tname)))
@@ -737,18 +916,17 @@ Based on file availability."
 choose a target type to insert."
   (interactive)
   (apigee--require-apiproxy "Adding a target")
-  (let ((apiproxy-dir (apigee--require-bundle))
+  (let ((bundle (apigee--require-bundle))
         (template-name
          (completing-read
           "target template: "
-          (dc-ss/completion-fn
-           (mapcar (lambda (x) (car x)) apigee--target-template-alist)
-           'sorted-sanely)
+          (apigee--completion-table
+           (mapcar (lambda (x) (car x)) apigee--target-template-alist))
           nil t nil)))
     (progn
       (when (string-empty-p template-name)
         (user-error "[apigee] No target template chosen"))
-      (let ((target-dir (concat apiproxy-dir "apiproxy/targets/"))
+      (let ((target-dir (apigee--bundle-subdir bundle "targets"))
             (have-name nil)
             (target-name-prompt "target name: ")
             (choice (assoc template-name apigee--target-template-alist)))
@@ -760,12 +938,12 @@ choose a target type to insert."
 
           ;;(asset-name (read-string (format "%s name?: " asset-type) default-value nil default-value)))
 
-          (let* ((default-value (apigee--suggested-target-name template-name))
+          (let* ((default-value (apigee--suggested-target-name target-dir template-name))
                  (target-name
                   (let (n)
                     (while (not have-name)
                       (setq n (read-string target-name-prompt default-value nil default-value)
-                            have-name (apigee--target-name-is-available n)
+                            have-name (apigee--target-name-is-available target-dir n)
                             target-name-prompt "That name is in use. Target name: " ))
                     n))
                  (elaborated-contents
@@ -775,8 +953,8 @@ choose a target type to insert."
 
             ;; create the file, expand the snippet, save it.
             (find-file (concat target-dir target-name ".xml"))
-            ;; yas-expand-snippet-sync does not return until the snip is expanded.
-            (yas-expand-snippet-sync elaborated-contents (point) (point))
+            ;; apigee--expand-snippet does not return until the snip is expanded.
+            (apigee--expand-snippet elaborated-contents)
             (save-buffer)
             ;; here, optionally open the resource file, if any
             (kill-new
@@ -829,7 +1007,7 @@ Returns the path of selected items as a list of strings, or nil if aborted."
                            (format "%s (%s): " prompt-base (mapconcat #'identity selected-path " > "))
                          (format "%s: " prompt-base)))
                (raw-selection (completing-read prompt
-                                               (dc-ss/completion-fn effective-options 'sorted-sanely)
+                                               (apigee--completion-table effective-options)
                                                nil t)))
 
           (cond
@@ -885,13 +1063,10 @@ or resources/py, or resources/xsl."
           (concat (downcase (substring s 0 1)) (substring s 1)))
       name)))
 
-(defun apigee--policy-name-is-available (pname)
+(defun apigee--policy-name-is-available (policies-dir pname)
   "Return true if the passed policy name PNAME is unused, in other words
-if no file exists by that name in the given proxy.
-"
-  (let ((filename-to-check
-         (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/" pname ".xml")))
-    (not (file-exists-p filename-to-check))))
+if no file exists by that name in POLICIES-DIR."
+  (not (file-exists-p (file-name-concat policies-dir (concat pname ".xml")))))
 
 (defun apigee--string-is-uppercase-acronym-p (str)
   (let ((case-fold-search nil))
@@ -914,10 +1089,10 @@ if no file exists by that name in the given proxy.
                         (or (cadr (assoc ptype apigee--policytype-shortform)) ptype))))
     (list name-prefix name-suffix)))
 
-(defun apigee--suggested-policy-name (ptype filename)
+(defun apigee--suggested-policy-name (policies-dir ptype filename)
   "Returns a string that contains a default policy name. Derives the name
 from PTYPE policy type, and FILENAME which is the fully-qualified filename.
-Uses a counter that is indexed per policy type within each API Proxy.
+Uses a counter, so the name is unused in POLICIES-DIR.
 "
   (let* ((name-elements (apigee--policy-name-elements ptype filename))
          (name-prefix (car name-elements))
@@ -928,7 +1103,7 @@ Uses a counter that is indexed per policy type within each API Proxy.
                            (concat name-prefix "-" name-suffix "-" (format "%d" v))
                          (concat name-prefix "-" name-suffix)))))
       (let ((pname (funcall next-name val)))
-        (while (not (apigee--policy-name-is-available pname))
+        (while (not (apigee--policy-name-is-available policies-dir pname))
           (setq val (1+ val)
                 pname (funcall next-name val)))
         pname))))
@@ -1013,9 +1188,8 @@ environment and the ='validateBundle.py'= script, relative to
 The name comes from the single top-level XML file in the bundle
 directory. It accepts arguments because `apigee--replace-placeholder'
 passes one."
-  (when-let* ((bundle-root (apigee--root-path-of-bundle))
-              (bundle-type (apigee--type-of-bundle)))
-    (let* ((bundle-dir (concat bundle-root bundle-type))
+  (when-let* ((bundle (apigee--bundle)))
+    (let* ((bundle-dir (apigee--bundle-subdir bundle))
            (file-list (apigee--proper-files bundle-dir ".xml"))
            (defn-file (apigee--verify-exactly-one file-list bundle-dir)))
       (apigee--trim-xml-suffix (file-name-nondirectory defn-file)))))
@@ -1025,7 +1199,7 @@ passes one."
 ACTION names what the user tried, for the message. The import and deploy
 commands in `apigee-commands-alist' use \"apigeecli apis\" and so work
 only for API proxies."
-  (when (equal (apigee--type-of-bundle) "sharedflowbundle")
+  (when (equal (plist-get (apigee--bundle) :type) "sharedflowbundle")
     (user-error "[apigee] %s supports only API proxies, not sharedflows" action)))
 
 (defun apigee--substitute-placeholder (key value template)
@@ -1172,7 +1346,7 @@ is masked too."
 is part of an apiproxy, and if the ROOT-DIR-IN-QUESTION is the same
 as the root of the current buffer.
 Used as a predicate for `save-some-buffers'."
-  (let ((bundle-dir (apigee--root-path-of-bundle)))
+  (let ((bundle-dir (plist-get (apigee--bundle) :root)))
     (and bundle-dir
          (not (s-blank? bundle-dir))
          (equal bundle-dir root-dir-in-question))))
@@ -1187,7 +1361,7 @@ Returns nil if no such item is found."
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
   "Run a command for the current API proxy or sharedflow."
-  (if-let* ((bundle-dir (apigee--root-path-of-bundle)))
+  (if-let* ((bundle-dir (plist-get (apigee--bundle) :root)))
       (if-let* ((bundle-name (apigee--bundle-name))
                 (cmd (apigee--get-command command-symbol want-prompt)))
           (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " bundle-name "*")))
@@ -1249,7 +1423,7 @@ Returns nil if no such item is found."
                        (add-hook 'compilation-start-hook #'apigee--mask-command-echo nil t)
                        (setq buffer-read-only t))))))))
         (error "Can't find bundle name, or can't resolve command."))
-    (error "You do not appear to be in an API proxy or sharedflow directory.")))
+    (user-error "[apigee] You do not appear to be in an API proxy or sharedflow directory")))
 
 
 ;; (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)
@@ -1320,10 +1494,11 @@ from a template that doesn't send back a revision header.
 
 Running it again on a proxy that already has the logic changes nothing."
   (interactive)
-  (let ((bundle-dir (apigee--root-path-of-bundle))
-        (bundle-type (apigee--type-of-bundle)))
+  (apigee--require-apiproxy "Injecting the revision logic")
+  (let* ((bundle (apigee--require-bundle))
+         (bundle-type (plist-get bundle :type)))
     (if (s-equals? bundle-type "apiproxy")
-        (let* ((bundle-policy-dir (concat bundle-dir bundle-type "/policies/"))
+        (let* ((bundle-policy-dir (apigee--bundle-subdir bundle "policies"))
                (clean-headers-policy
                 (apigee--ensure-assign-message-policy
                  "clean request headers from response.xml" bundle-policy-dir))
@@ -1335,13 +1510,13 @@ Running it again on a proxy that already has the logic changes nothing."
           ;; right places in the various proxy endpoint(s).
 
           (let ((bundle-proxy-dir
-                 (concat bundle-dir bundle-type "/proxies/")))
+                 (apigee--bundle-subdir bundle "proxies")))
             (dolist (proxyendpoint-file
                      (apigee--proper-files bundle-proxy-dir ".xml"))
               (save-excursion
                 (with-current-buffer (find-file-noselect proxyendpoint-file)
                   (let*
-                      ((root (xml-parse-region (point-min) (point-max)))
+                      ((root (apigee--parse-buffer))
                        (proxy-endpoint-elt (car root))
                        (default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))
                        (preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))
@@ -1401,8 +1576,8 @@ The policy name is derived from TEMPLATE-FILE. Return the policy name."
               policy-name)))
         ;; create the file, expand the snippet, save it.
         (with-current-buffer (find-file-noselect fullpath-dest-policy-path)
-          ;; yas-expand-snippet-sync does not return until the snip is expanded.
-          (yas-expand-snippet-sync elaborated-contents (point) (point))
+          ;; apigee--expand-snippet does not return until the snip is expanded.
+          (apigee--expand-snippet elaborated-contents)
           (save-buffer))))
     policy-name))
 
@@ -1476,9 +1651,11 @@ of them, NEW-CHILD becomes its last child."
 
 
 (defun apigee--parse-xml (xml-string)
+  "Parse XML-STRING, keeping comments; return a list of xml.el nodes."
   (with-temp-buffer
     (insert xml-string)
-    (xml--parse-buffer nil nil)))
+    (apigee--with-comment-preserving-xml
+     (xml--parse-buffer nil nil))))
 
 
 (defun apigee--elaborate-template (fullpath-template-filename thing-name)
@@ -1501,23 +1678,24 @@ into the policy file. It then will open any resource files as
 appropriate.
 "
   (interactive)
-  (let ((bundle-dir (apigee--require-bundle))
-        (bundle-type (apigee--type-of-bundle))
-        (choice (apigee--prompt-user-with-policy-choices)))
+  (let* ((bundle (apigee--require-bundle))
+         (bundle-dir (plist-get bundle :root))
+         (bundle-type (plist-get bundle :type))
+         (choice (apigee--prompt-user-with-policy-choices)))
     (when choice ;; is a cons cell
-      (let ((policy-dir (concat bundle-dir bundle-type "/policies/"))
+      (let ((policy-dir (apigee--bundle-subdir bundle "policies"))
             (ptype (car choice))
             (template-filename (concat (cadr choice) ".xml"))
             (have-name nil)
             (policy-name-prompt "policy name: "))
         (and (not (file-exists-p policy-dir))
              (make-directory policy-dir))
-        (let* ((default-value (apigee--suggested-policy-name ptype template-filename))
+        (let* ((default-value (apigee--suggested-policy-name policy-dir ptype template-filename))
                (policy-name
                 (let (n)
                   (while (not have-name)
                     (setq n (read-string policy-name-prompt default-value nil default-value)
-                          have-name (apigee--policy-name-is-available n)
+                          have-name (apigee--policy-name-is-available policy-dir n)
                           policy-name-prompt "That name is in use. Policy name: " ))
                   n))
                (fullpath-template-filename
@@ -1527,8 +1705,8 @@ appropriate.
 
           ;; create the file, expand the snippet, save it.
           (find-file (concat policy-dir policy-name ".xml"))
-          ;; yas-expand-snippet-sync does not return until the snip is expanded.
-          (yas-expand-snippet-sync elaborated-contents (point) (point))
+          ;; apigee--expand-snippet does not return until the snip is expanded.
+          (apigee--expand-snippet elaborated-contents)
           (save-buffer)
           ;;(apigee-mode 1)
           ;; here, optionally open the resource file, if any
@@ -1559,10 +1737,10 @@ appropriate.
   "returns true if the filename represents a policy file in the current
 proxy/sharedflow bundle"
   (when-let* ((s)
-              (bundle-root (apigee--root-path-of-bundle)))
+              (bundle (apigee--bundle)))
     (and (file-exists-p s)
          ;; The bundle root is a truename, so compare against S's truename.
-         (s-starts-with? (concat bundle-root (apigee--type-of-bundle) "/policies/")
+         (s-starts-with? (apigee--bundle-subdir bundle "policies")
                          (file-truename s)))))
 
 (defun apigee--current-policy-name ()
@@ -1572,14 +1750,12 @@ is visiting a policy file. otherwise nil."
     (if (apigee--is-policy-file current-filename)
         (s-chop-suffix ".xml" (car (reverse (split-string current-filename
                                                           "/")))))))
-(defun apigee--list-policies ()
-  "returns a list of policies in the current bundle"
-  (if (apigee--root-path-of-bundle)
-      (let* ((policy-dir
-              (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle) "/policies/"))
-             (fq-names (apigee--sort-strings (apigee--proper-files policy-dir ".xml"))))
-        (mapcar (lambda (s) (s-chop-suffix ".xml" (car (reverse (split-string s "/")))))
-                fq-names))))
+(defun apigee--list-policies (bundle)
+  "Return the sorted names of the policies in BUNDLE."
+  (let ((fq-names (apigee--sort-strings
+                   (apigee--proper-files (apigee--bundle-subdir bundle "policies") ".xml"))))
+    (mapcar (lambda (s) (s-chop-suffix ".xml" (car (reverse (split-string s "/")))))
+            fq-names)))
 
 (defun apigee--policy-name-char-p (char)
   "Return non-nil if CHAR can be part of a policy name.
@@ -1605,15 +1781,16 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
 (defun apigee-rename-policy ()
   "Rename a policy to a new name"
   (interactive)
-  (let ((current-policies (apigee--list-policies))
-        (predicate-ignored nil)
-        (require-match nil)
-        (initial-input (apigee--current-policy-name))
-        (hist nil)
-        (def (apigee--current-policy-name)))
+  (let* ((bundle (apigee--require-bundle))
+         (current-policies (apigee--list-policies bundle))
+         (predicate-ignored nil)
+         (require-match nil)
+         (initial-input (apigee--current-policy-name))
+         (hist nil)
+         (def initial-input))
     (let* ((name-of-policy-to-rename
             (completing-read "rename policy: "
-                             (dc-ss/completion-fn current-policies 'sorted-sanely)
+                             (apigee--completion-table current-policies)
                              predicate-ignored require-match initial-input hist def))
            (new-name (read-string (format "rename '%s' to : " name-of-policy-to-rename)
                                   name-of-policy-to-rename nil name-of-policy-to-rename)))
@@ -1622,8 +1799,7 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
           (message "nothing to do.")
         (if (member new-name current-policies)
             (message "there is already a policy with that name.")
-          (let* ((bundle-dir (concat (apigee--root-path-of-bundle) (apigee--type-of-bundle)))
-                 (policy-dir (concat bundle-dir "/policies/")))
+          (let* ((policy-dir (apigee--bundle-subdir bundle "policies")))
             (let ((fq-old-fname (concat policy-dir name-of-policy-to-rename ".xml"))
                   (fq-new-fname (concat policy-dir new-name ".xml")))
               (message "renaming %s to %s..." name-of-policy-to-rename new-name)
@@ -1656,7 +1832,7 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
 
                 ;; modify all references to this policy
                 (dolist (dir
-                         (mapcar (lambda (s) (concat bundle-dir "/" s))
+                         (mapcar (lambda (s) (apigee--bundle-subdir bundle s))
                                  (list "targets" "proxies" "sharedflows")))
                   (if (file-exists-p dir)
                       (dolist (one-file (apigee--proper-files dir ".xml"))
@@ -1737,7 +1913,8 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
 (defun apigee--serialize-xml-elt (elt)
   "Serialize an XML element into the current buffer, and then collapse newlines."
   (erase-buffer)
-  (xml-print elt)
+  (apigee--with-comment-preserving-xml
+   (xml-print elt))
   (apigee--cleanup-newlines)
   (apigee--cleanup-quotes)
   (save-excursion
@@ -1799,7 +1976,7 @@ changing names and replacing / expanding things as appropriate."
         (copy-file (car file-list) new-xml-file-name nil t t nil)
         (with-current-buffer (find-file-noselect new-xml-file-name)
           (let*
-              ((root (xml-parse-region (point-min) (point-max)))
+              ((root (apigee--parse-buffer))
                (apiproxy-elt (car root))
                (display-name-elt (car (xml-get-children apiproxy-elt 'DisplayName))))
             (apigee--xml-set-attribute apiproxy-elt 'name proxy-name)
@@ -1817,7 +1994,7 @@ changing names and replacing / expanding things as appropriate."
       (if (= (length file-list) 1)
           (with-current-buffer (find-file-noselect (car file-list))
             (let*
-                ((root (xml-parse-region (point-min) (point-max)))
+                ((root (apigee--parse-buffer))
                  (proxy-endpoint-elt (car root))
                  (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
                  (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
@@ -1840,7 +2017,7 @@ changing names and replacing / expanding things as appropriate."
         (copy-file (car file-list) new-xml-file-name nil t t nil)
         (with-current-buffer (find-file-noselect new-xml-file-name)
           (let*
-              ((root (xml-parse-region (point-min) (point-max)))
+              ((root (apigee--parse-buffer))
                (sfbundle-elt (car root))
                (display-name-elt (car (xml-get-children sfbundle-elt 'DisplayName))))
             (apigee--xml-set-attribute sfbundle-elt 'name sf-name)
@@ -1900,9 +2077,8 @@ if necessary."
     (let ((containing-dir
            (completing-read
             "containing directory?: "
-            (dc-ss/completion-fn
-             (delete-dups (mapcar #'abbreviate-file-name (delq nil candidate-list)))
-             'sorted-sanely)
+            (apigee--completion-table
+             (delete-dups (mapcar #'abbreviate-file-name (delq nil candidate-list))))
             nil nil nil)))
       (and (not (file-exists-p containing-dir))
            (make-directory containing-dir t))
@@ -1979,9 +2155,8 @@ PROMPT-ARG - whether invoked with a prefix
            (apigee--require-input
             (completing-read
              (format "%s template: " asset-type)
-             (dc-ss/completion-fn
-              (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
-              'sorted-sanely)
+             (apigee--completion-table
+              (mapcar (lambda (x) (car x)) (symbol-value alist-sym)))
              nil t nil)
             (format "A %s template" asset-type)))
           (containing-dir

@@ -4,11 +4,10 @@
 ;;
 ;; Run from this directory with:
 ;;
-;;   emacs -Q --batch -L . -L ~/elisp -f package-initialize \
+;;   emacs -Q --batch -L . -f package-initialize \
 ;;     -l apigee-tests.el -f ert-run-tests-batch-and-exit
 ;;
-;; ~/elisp provides dc-xml, dc-sane-sorting and xml-to-string;
-;; `package-initialize' provides s and dash.
+;; `package-initialize' provides s, dash and yasnippet.
 ;;
 ;; Loading apigee.el reads, and on exit writes, the settings file in
 ;; `user-emacs-directory'. So this file points that at a temporary
@@ -21,6 +20,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'lisp-mnt)
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
@@ -103,9 +103,9 @@ Each prompt is recorded, with its REQUIRE-MATCH argument, in the variable
   "Prompts seen by `apigee-tests--with-answers', newest first.")
 
 (defmacro apigee-tests--with-snippets (&rest body)
-  "Run BODY with `yas-expand-snippet-sync' inserting the snippet text as-is.
-That function comes from the author's init file, not from apigee.el."
-  `(cl-letf (((symbol-function 'yas-expand-snippet-sync)
+  "Run BODY with `apigee--expand-snippet' inserting the snippet text as-is.
+The real one waits in a recursive edit for the user to fill in fields."
+  `(cl-letf (((symbol-function 'apigee--expand-snippet)
               (lambda (content &rest _) (insert content))))
      ,@body))
 
@@ -118,15 +118,32 @@ Return the apiproxy directory."
     (make-directory (file-name-concat bundle "policies") t)
     bundle))
 
-;;; XML handling (dc-xml dependency, 0.1)
+;;; XML handling (0.1, 2.1b)
 
-(ert-deftest apigee-test-0.1-xml-parse-keeps-comments ()
-  "The comment-preserving parser override from dc-xml parses and keeps comments."
-  (let ((root (with-temp-buffer
-                (insert "<a>\n  <!-- c -->\n  <b>/x</b>\n</a>")
-                (xml-parse-region (point-min) (point-max)))))
+(ert-deftest apigee-test-0.1-2.1-xml-parse-keeps-comments ()
+  "apigee's parser keeps comments, and handles text such as /x (0.1)."
+  (let ((root (apigee--parse-xml "<a>\n  <!-- c -->\n  <b>/x</b>\n</a>")))
     (should (equal (car (xml-get-children (car root) 'b)) '(b nil "/x")))
     (should (member '(nil . "<!-- c -->") (xml-node-children (car root))))))
+
+(ert-deftest apigee-test-2.1-xml-override-is-scoped ()
+  "The comment-preserving parser and printer apply only inside apigee (2.1b)."
+  (apigee--parse-xml "<a/>")
+  (should-not (eq (symbol-function 'xml-parse-tag-1) #'apigee--xml-parse-tag-1))
+  (should-not (eq (symbol-function 'xml-debug-print-internal) #'apigee--xml-print-internal))
+  (let ((root (with-temp-buffer
+                (insert "<a><!-- c --><b/></a>")
+                (xml-parse-region (point-min) (point-max)))))
+    (should-not (assq nil (xml-node-children (car root))))))
+
+(ert-deftest apigee-test-2.1-serialize-keeps-comments ()
+  "Parsing and re-serializing an XML file keeps its comments."
+  (with-temp-buffer
+    (insert "<ProxyEndpoint name=\"default\">\n  <!-- keep me -->\n  <Flows/>\n</ProxyEndpoint>\n")
+    (let ((root (apigee--parse-buffer)))
+      (apigee--serialize-xml-elt root))
+    (should (string-match-p "<!-- keep me -->" (buffer-string)))
+    (should (string-match-p "<Flows/>" (buffer-string)))))
 
 ;;; Rename policy (1.1, 1.2)
 
@@ -454,8 +471,10 @@ Return the parsed ProxyEndpoint element afterwards."
         (apigee--recently-used-asset-homes nil)
         (default-directory "/tmp/aab/x/")
         captured)
-    (cl-letf (((symbol-function 'dc-ss/completion-fn) (lambda (cands &rest _) (setq captured cands)))
-              ((symbol-function 'completing-read) (lambda (&rest _) "/tmp/aab/x/"))
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_prompt collection &rest _)
+                 (setq captured (all-completions "" collection))
+                 "/tmp/aab/x/"))
               ((symbol-function 'make-directory) #'ignore))
       (apigee--prompt-for-containing-dir))
     (should (equal captured '("/tmp/aab/x/")))))
@@ -494,10 +513,77 @@ Return the parsed ProxyEndpoint element afterwards."
                           timer-list)))
   (should (memq 'apigee--persist-state kill-emacs-hook)))
 
+;;; Self-contained package (2.1)
+
+(ert-deftest apigee-test-2.1-no-private-dependencies ()
+  "Loading apigee.el pulls in none of the author's private libraries."
+  (dolist (feature '(dc-xml dc-sane-sorting xml-to-string))
+    (should-not (featurep feature)))
+  (should-not (fboundp 'yas-expand-snippet-sync)))
+
+(ert-deftest apigee-test-2.1-completion-table-sorts-alphabetically ()
+  (let* ((table (apigee--completion-table '("bb" "a" "ccc")))
+         (metadata (completion-metadata "" table nil)))
+    (should (eq (completion-metadata-get metadata 'category) 'sorted-sanely))
+    (should (equal (funcall (completion-metadata-get metadata 'display-sort-function)
+                            '("ccc" "a" "bb"))
+                   '("a" "bb" "ccc")))
+    (should (equal (all-completions "b" table) '("bb")))))
+
+(ert-deftest apigee-test-2.1-expand-snippet-without-fields ()
+  "A snippet with no fields is inserted, and the call returns at once."
+  (skip-unless (require 'yasnippet nil t))
+  (with-temp-buffer
+    (apigee--expand-snippet "<Step><Name>X</Name></Step>")
+    (should (equal (buffer-string) "<Step><Name>X</Name></Step>"))))
+
+(ert-deftest apigee-test-2.1-package-requires-header ()
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
+    (let ((requires (car (read-from-string (lm-header "Package-Requires")))))
+      (should (equal (mapcar #'car requires) '(emacs s dash yasnippet))))))
+
+;;; Bundle lookup (2.2)
+
+(ert-deftest apigee-test-2.2-bundle-lookup ()
+  (apigee-tests--with-temp-dir dir
+    (apigee-tests--new-asset "proxy" "p1" "loopback" dir)
+    (apigee-tests--new-asset "sharedflow" "s1" "basic" dir)
+    (let ((default-directory (file-name-concat dir "p1" "apiproxy" "policies/")))
+      (should (equal (apigee--bundle) (list :root (file-name-concat dir "p1/") :type "apiproxy")))
+      (should (equal (apigee--bundle-subdir (apigee--bundle) "targets")
+                     (file-name-concat dir "p1" "apiproxy" "targets/")))
+      (should (equal (apigee--bundle-subdir (apigee--bundle))
+                     (file-name-concat dir "p1" "apiproxy/"))))
+    (let ((default-directory (file-name-concat dir "s1/")))
+      (should (equal (plist-get (apigee--bundle) :type) "sharedflowbundle")))
+    (let ((default-directory dir))
+      (should-not (apigee--bundle)))))
+
+(ert-deftest apigee-test-2.2-commands-signal-outside-a-bundle ()
+  (apigee-tests--with-temp-dir dir
+    (let ((default-directory dir))
+      (apigee-tests--with-answers '("x" "y")
+        (should-error (apigee-inject-proxy-revision-logic) :type 'user-error)
+        (should-error (apigee-rename-policy) :type 'user-error)
+        (should-error (apigee-lint-asset nil) :type 'user-error)
+        (should-not apigee-tests--prompts)))
+    (let ((default-directory (apigee-tests--new-asset "sharedflow" "s1" "basic" dir)))
+      (should-error (apigee-inject-proxy-revision-logic) :type 'user-error))))
+
+(ert-deftest apigee-test-2.2-suggested-names-use-given-dir ()
+  (apigee-tests--with-temp-dir dir
+    (apigee-tests--write (file-name-concat dir "AM-Set-Header.xml") "<x/>")
+    (apigee-tests--write (file-name-concat dir "AM-Set-Header-1.xml") "<x/>")
+    (should (equal (apigee--suggested-policy-name dir "AssignMessage" "set header.xml")
+                   "AM-Set-Header-2"))
+    (apigee-tests--write (file-name-concat dir "http-1.xml") "<x/>")
+    (should (equal (apigee--suggested-target-name dir "http") "http-2"))))
+
 ;;; Byte compilation (1.18, 2.9)
 
-(defconst apigee-tests--max-compile-warnings 11
-  "Byte-compiler warnings for apigee.el as of commit 27d541d.
+(defconst apigee-tests--max-compile-warnings 10
+  "Byte-compiler warnings for apigee.el, as of the 2.1/2.2 commit.
 Lower this as review item 2.9 removes them; it should end at 0.")
 
 (defun apigee-tests--compile-warnings ()
