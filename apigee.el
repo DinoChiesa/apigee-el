@@ -159,9 +159,9 @@ file, for example,
     )"
   )
 
-(defvar apigee--memoized-gcloud-pat
+(defvar apigee--gcloud-access-token-cache
   nil
-  "memoized version of print-access-token")
+  "Memoized `apigee--gcloud-print-access-token'; see `apigee--gcloud-access-token'.")
 
 (defvar apigee-placeholders-alist
   `(
@@ -223,18 +223,9 @@ is filled in last, after the user has had a chance to edit the command."
    '("ServiceCallout" "SC")
    '("XSL" "XSL")
    '("AccessControl" "AC")
-   '("Script" "PY")
-   '("LookupCache" "Cache")
-   '("PopulateCache" "Cache")
-   '("InvalidateCache" "Cache")
-   '("ResponseCache" "Cache")
    '("RaiseFault" "RF")
    '("MessageLogging" "ML")
-   '("GenerateSAMLAssertion" "SAML")
-   '("ValidateSAMLAssertion" "SAML")
-   '("VerifyApiKey" "VerifyApiKey")
    '("FlowCallout" "FC")
-   '("JavaCallout" "Java")
    '("JavaScript" "JS")
    '("ExtractVariables" "EV")
    '("OAuthV2" "OAuthV2")
@@ -244,10 +235,10 @@ is filled in last, after the user has had a chance to edit the command."
    ;; '("GenerateJWT" "JWT")
    ;; '("DecodeJWT" "JWT")
    '("JSONToXML" "J2X")
-   '("GetOAuthV2Info" "OAuthV2-GetInfo")
-   '("SetOAuthV2Info" "OAuthV2-SetInfo")
-   '("DeleteOAuthV2Info" "OAuthV2-DeleteInfo")
-   '("BasicAuthentication" "BA")))
+   '("BasicAuthentication" "BA"))
+  "Abbreviations used as the prefix of suggested policy names.
+Keyed by policy type, which is the name of a directory under
+templates/policies. A type with no entry uses the directory name.")
 
 (defconst apigee--http-status-message-alist
   (list
@@ -660,13 +651,6 @@ It is expected that this function will be called periodically."
 slashes as necessary, as with Python's os.path.join."
   (apply #'file-name-concat root dirs))
 
-(defun apigee--insure-trailing-slash (path)
-  "Insure the given path ends with a slash. This is usedful with
-`default-directory'. Setting `default-directory' to a value that
-does not end with a slash causes it to use the parent directory."
-  (and path
-       (if (string-suffix-p "/" path) path (concat path "/"))))
-
 (defun apigee--proper-subdirs (containing-dir)
   "Return list of full paths of proper subdirs found in CONTAINING-DIR."
   (seq-remove (lambda (file)
@@ -931,7 +915,7 @@ If the apiproxy is defined in a structure like this:
 ... and this function is invoked from anywhere in one of those directories,
 then ROOT is ~/foo/bar/APINAME/ (expanded). It always ends in slash."
   (when-let* ((found (seq-some #'apigee--find-bundle '("apiproxy" "sharedflowbundle"))))
-    (list :root (file-truename (apigee--insure-trailing-slash (car found)))
+    (list :root (file-truename (file-name-as-directory (car found)))
           :type (cadr found))))
 
 (defun apigee--bundle-subdir (bundle &rest subdirs)
@@ -1136,8 +1120,8 @@ Uses a counter, so the name is unused in POLICIES-DIR.
      (concat name-prefix "-" name-suffix)
      (lambda (name) (apigee--policy-name-is-available policies-dir name)))))
 
-(defun apigee-gcloud-auth-print-access-token (&rest _)
-  "Return the output of gcloud auth print-access-token."
+(defun apigee--gcloud-print-access-token ()
+  "Return the output of gcloud auth print-access-token, uncached."
   (let* ((gcloud-pgm (alist-get 'gcloud apigee-programs-alist))
          (words (or (apigee--resolve-program gcloud-pgm)
                     (error "cannot resolve %s" gcloud-pgm))))
@@ -1165,12 +1149,16 @@ Uses a counter, so the name is unused in POLICIES-DIR.
             (puthash key (cons result now) apigee-function-cache) ; Update cache
             result))))))
 
-(setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
+(define-obsolete-function-alias 'apigee-gcloud-auth-print-access-token
+  #'apigee--gcloud-print-access-token "2026-10-26")
+
+(setq apigee--gcloud-access-token-cache
+      (apigee--memoize-with-timeout #'apigee--gcloud-print-access-token (* 1 60)))
 
 (defun apigee--gcloud-access-token (&rest _)
   "Return a gcloud access token, cached for a minute.
 The %t placeholder in `apigee-placeholders-alist'."
-  (funcall apigee--memoized-gcloud-pat))
+  (funcall apigee--gcloud-access-token-cache))
 
 
 (defun apigee--get-xmlschema-validator-program ()
@@ -1469,47 +1457,47 @@ Used as a predicate for `save-some-buffers'."
 ;;         (replace-match "--token ***masked***")))
 ;;     (setq buffer-read-only t)))))))
 
-(defun apigee-lint-asset (have-prefix)
+(defun apigee-lint-asset (want-prompt)
   "Run apigeelint on the current API proxy or sharedflow.
 
 With a prefix argument (e.g., C-u), prompt the user to edit
 the command before running it."
   (interactive "P")
-  (apigee--run-command-for-proxy "apigeelint" 'lint have-prefix))
+  (apigee--run-command-for-proxy "apigeelint" 'lint want-prompt))
 
-(defun apigee-validate-xml-for-asset (have-prefix)
+(defun apigee-validate-xml-for-asset (want-prompt)
   "Run the XML Validator on the current API proxy or sharedflow.
 
 With a prefix argument (e.g., C-u), prompt the user to edit
 the command before running it."
   (interactive "P")
-  (apigee--run-command-for-proxy "validate" 'validate have-prefix))
+  (apigee--run-command-for-proxy "validate" 'validate want-prompt))
 
 ;;;###autoload
-(defun apigee-import-and-deploy-proxy (have-prefix)
+(defun apigee-import-and-deploy-proxy (want-prompt)
   "Import AND deploy the API proxy.
 
 With a prefix argument (e.g., C-u), prompt the user for org/env
 before running it."
-  (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
   (apigee--require-apiproxy "Import and deploy")
-  (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy have-prefix))
+  (apigee--run-command-for-proxy "apigeecli" 'import-and-deploy want-prompt))
 
 ;;;###autoload
-(defun apigee-import-proxy (have-prefix)
+(defun apigee-import-proxy (want-prompt)
   "Import the API proxy."
-  (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
   (apigee--require-apiproxy "Import")
-  (apigee--run-command-for-proxy "apigeecli" 'import have-prefix))
+  (apigee--run-command-for-proxy "apigeecli" 'import want-prompt))
 
 ;;;###autoload
-(defun apigee-deploy-proxy (have-prefix)
+(defun apigee-deploy-proxy (want-prompt)
   "Deploy the API proxy. This doesn't use the proxy configuration in the
 filesystem, beyond the name. It's assumed you've recently called
 `apigee-import-proxy', and there is a revision to deploy."
-  (interactive "P") ;; if have-prefix is non-nil, prompt the user for org/env
+  (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
   (apigee--require-apiproxy "Deploy")
-  (apigee--run-command-for-proxy "apigeecli" 'deploy have-prefix))
+  (apigee--run-command-for-proxy "apigeecli" 'deploy want-prompt))
 
 ;;;###autoload
 (defun apigee-inject-proxy-revision-logic ()
@@ -1728,7 +1716,7 @@ appropriate.
           ;;(apigee-mode 1)
           ;; here, optionally open the resource file, if any
           (cond
-           ((or (string= ptype "JavaScript") (string= ptype "XSL") (string= ptype "Python"))
+           ((member ptype '("JavaScript" "XSL"))
             (save-excursion
               (goto-char (point-min))
               (if (re-search-forward "<ResourceURL>\\(jsc\\|xsl\\|py\\)://\\(.+\\)</ResourceURL>" (point-max) t)
@@ -2104,7 +2092,7 @@ if necessary."
       containing-dir)))
 
 
-(defun apigee-new-proxy (arg)
+(defun apigee-new-proxy (want-prompt)
   "Interactive fn that creates a new exploded proxy bundle directory
 structure. Prompts for the name of the API Proxy, and the base template
 for the proxy.
@@ -2116,10 +2104,10 @@ When invoked without a prefix, it uses the most recent asset home
 directory. If no directory has ever been used, it prompts for the
 directory."
   (interactive "P")
-  (apigee--new-asset "proxy" arg))
+  (apigee--new-asset "proxy" want-prompt))
 
 
-(defun apigee-new-sharedflow (arg)
+(defun apigee-new-sharedflow (want-prompt)
   "Interactive fn that creates a new exploded sharedflow bundle directory
 structure. Prompts for the name of the sharedflow, and the base template
 for the thing.
@@ -2131,7 +2119,7 @@ When invoked without a prefix, it uses the most recent asset home
 directory. If no directory has ever been used, it prompts for the
 directory."
   (interactive "P")
-  (apigee--new-asset "sharedflow" arg))
+  (apigee--new-asset "sharedflow" want-prompt))
 
 
 (defun apigee--remember-asset-home (containing-dir)
@@ -2147,7 +2135,7 @@ directory."
       (user-error "[apigee] %s is required" what)
     value))
 
-(defun apigee--new-asset (asset-type prompt-arg)
+(defun apigee--new-asset (asset-type want-prompt)
   "Internal interactive fn that creates a new exploded asset directory
 structure. Prompts for the name of the asset, and the base template
 for the thing.
@@ -2162,7 +2150,7 @@ directory.
 This fn is not intended to be called directly.
 
 ASSET-TYPE - either \"proxy\" or \"sharedflow\"
-PROMPT-ARG - whether invoked with a prefix
+WANT-PROMPT - whether invoked with a prefix
 
 "
   (let ((alist-sym (apigee--asset-kind asset-type :templates)))
@@ -2179,7 +2167,7 @@ PROMPT-ARG - whether invoked with a prefix
              nil t nil)
             (format "A %s template" asset-type)))
           (containing-dir
-           (if prompt-arg
+           (if want-prompt
                (apigee--prompt-for-containing-dir)
              (or (car (apigee--fresh-recent-asset-homes nil)) (apigee--prompt-for-containing-dir)))))
       (apigee--remember-asset-home containing-dir)

@@ -353,7 +353,7 @@ Return the parsed ProxyEndpoint element afterwards."
          (apigee-organization "my-org")
          (apigee-environment "test")
          (apigee-service-account "-")
-         (apigee--memoized-gcloud-pat (lambda (&rest _) "TOK")))
+         (apigee--gcloud-access-token-cache (lambda (&rest _) "TOK")))
      (setf (alist-get 'apigeecli apigee-programs-alist) "sh"
            (alist-get 'apigeelint apigee-programs-alist) '("sh" "lint.js"))
      ,@body))
@@ -780,6 +780,33 @@ Return the parsed ProxyEndpoint element afterwards."
       (should-not found))
     (goto-char (point-min))
     (should-not (re-search-forward "^(require '\\(s\\|dash\\))" nil t))))
+
+;;; Naming (4.2 - 4.6)
+
+(ert-deftest apigee-test-4.2-4.4-old-names-gone ()
+  "Misleading or inconsistent names are gone (4.2 - 4.4)."
+  (dolist (fn '(apigee--xml-locate-first-child-node apigee--insure-trailing-slash))
+    (should-not (fboundp fn)))
+  (dolist (cmd '(apigee-lint-asset apigee-validate-xml-for-asset apigee-import-proxy
+                 apigee-deploy-proxy apigee-import-and-deploy-proxy
+                 apigee-new-proxy apigee-new-sharedflow))
+    (should (equal (help-function-arglist cmd t) '(want-prompt))))
+  (should (equal (help-function-arglist 'apigee--new-asset t) '(asset-type want-prompt))))
+
+(ert-deftest apigee-test-4.5-token-functions ()
+  (should (get 'apigee-gcloud-auth-print-access-token 'byte-obsolete-info))
+  (should (eq (indirect-function 'apigee-gcloud-auth-print-access-token)
+              (indirect-function 'apigee--gcloud-print-access-token)))
+  (should (eq (alist-get 't apigee-placeholders-alist) 'apigee--gcloud-access-token))
+  (let ((apigee--gcloud-access-token-cache (lambda () "TOK")))
+    (should (equal (apigee--gcloud-access-token t) "TOK"))))
+
+(ert-deftest apigee-test-4.6-shortforms-match-template-dirs ()
+  "Every abbreviation is keyed by an existing policy template directory."
+  (let ((dirs (directory-files (file-name-concat apigee--base-template-dir "policies")
+                               nil "\\`[^.]")))
+    (dolist (entry apigee--policytype-shortform)
+      (should (member (car entry) dirs)))))
 
 ;;; Byte compilation (1.18, 2.9)
 
