@@ -60,10 +60,10 @@ Afterwards, kill buffers visiting files under it and delete it."
 (defun apigee-tests--new-asset (asset-type name template-name dir)
   "Create asset NAME of ASSET-TYPE in DIR from the repo template TEMPLATE-NAME.
 Return the bundle directory, e.g. DIR/NAME/apiproxy/."
-  (let ((alist (symbol-value (intern (format "apigee--%s-template-alist" asset-type)))))
+  (let ((alist (symbol-value (apigee--asset-kind asset-type :templates))))
     (apigee--new-asset-from-template asset-type name alist template-name dir)
     (file-name-as-directory
-     (file-name-concat dir name (if (equal asset-type "proxy") "apiproxy" "sharedflowbundle")))))
+     (file-name-concat dir name (apigee--asset-kind asset-type :bundle)))))
 
 (defun apigee-tests--write (file contents)
   "Write CONTENTS to FILE, creating parent directories."
@@ -579,6 +579,39 @@ Return the parsed ProxyEndpoint element afterwards."
                    "AM-Set-Header-2"))
     (apigee-tests--write (file-name-concat dir "http-1.xml") "<x/>")
     (should (equal (apigee--suggested-target-name dir "http") "http-2"))))
+
+;;; Asset kinds (2.3, 3.2)
+
+(ert-deftest apigee-test-2.3-asset-kinds ()
+  (should (equal (apigee--asset-kind "proxy" :bundle) "apiproxy"))
+  (should (eq (apigee--asset-kind "sharedflow" :templates) 'apigee--sharedflow-template-alist))
+  (should-error (apigee--asset-kind "widget" :bundle))
+  (dolist (kind apigee--asset-kinds)
+    (should (boundp (plist-get (cdr kind) :templates)))
+    (let ((after-copy (plist-get (cdr kind) :after-copy)))
+      (should (or (null after-copy) (fboundp after-copy))))))
+
+(ert-deftest apigee-test-2.3-no-runtime-built-symbols ()
+  "Asset dispatch goes through `apigee--asset-kinds', not `intern' (2.3)."
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
+    (should-not (re-search-forward "(intern (format" nil t))))
+
+(ert-deftest apigee-test-3.2-one-copier-for-both-kinds ()
+  "Both kinds go through `apigee--copy-bundle-template'; only proxies get a BasePath."
+  (apigee-tests--with-temp-dir dir
+    (let (calls)
+      (advice-add 'apigee--copy-bundle-template :before
+                  (lambda (type &rest _) (push type calls)) '((name . apigee-test)))
+      (unwind-protect
+          (progn
+            (apigee-tests--new-asset "proxy" "p1" "loopback" dir)
+            (apigee-tests--new-asset "sharedflow" "s1" "basic" dir))
+        (advice-remove 'apigee--copy-bundle-template 'apigee-test))
+      (should (equal calls '("sharedflow" "proxy"))))
+    (let ((sf (apigee-tests--read (file-name-concat dir "s1" "sharedflowbundle" "s1.xml"))))
+      (should (string-match-p "name=\"s1\"" sf))
+      (should (string-match-p "<DisplayName>s1</DisplayName>" sf)))))
 
 ;;; Byte compilation (1.18, 2.9)
 

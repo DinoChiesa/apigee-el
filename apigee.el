@@ -322,6 +322,34 @@ string, a file name, containing the target template.")
 entry is a string, a directory name, containing the exploded sharedflow
 template.")
 
+(defconst apigee--asset-kinds
+  '(("proxy"
+     :templates apigee--proxy-template-alist
+     :template-subdir "proxies"
+     :bundle "apiproxy"
+     :subdirs ("proxies" "policies" "resources" "targets")
+     :after-copy apigee--set-proxy-basepath)
+    ("sharedflow"
+     :templates apigee--sharedflow-template-alist
+     :template-subdir "sharedflows"
+     :bundle "sharedflowbundle"
+     :subdirs ("sharedflows" "policies" "resources")))
+  "What differs between the kinds of asset created from a template.
+Each entry is (ASSET-TYPE . PLIST), with these properties:
+  :templates        variable holding the loaded templates, an alist
+  :template-subdir  directory under `apigee--base-template-dir' holding
+                    the templates
+  :bundle           name of the bundle directory, e.g. \"apiproxy\"
+  :subdirs          bundle subdirectories copied from a template
+  :after-copy       optional function called with the new bundle
+                    directory and the asset name, after the copy")
+
+(defun apigee--asset-kind (asset-type property)
+  "Return PROPERTY of ASSET-TYPE from `apigee--asset-kinds'."
+  (plist-get (or (cdr (assoc asset-type apigee--asset-kinds))
+                 (error "[apigee] unknown asset type %s" asset-type))
+             property))
+
 
 (defun apigee--completion-table (candidates)
   "Return a completion table for CANDIDATES that lists them alphabetically.
@@ -662,10 +690,13 @@ is used to populate the menu of available policy templates."
          (mapcar (lambda (item) (length (cadr item)))
                  apigee--policy-template-alist)))
 
-(defun apigee--load-asset-templates (sym label subdir)
-  "Load templates for a kind of asset from the template dir,
-then set the symbol to the alist."
-  (let ((top-level-dir (apigee--join-path-elements apigee--base-template-dir subdir )))
+(defun apigee--load-asset-templates (asset-type)
+  "Load the templates for ASSET-TYPE, a key in `apigee--asset-kinds',
+from the template dir, then set the kind's :templates variable to the alist."
+  (let* ((sym (apigee--asset-kind asset-type :templates))
+         (label asset-type)
+         (top-level-dir (apigee--join-path-elements apigee--base-template-dir
+                                                    (apigee--asset-kind asset-type :template-subdir))))
     (set sym
          (let (template-list)
            (dolist (template-name (apigee--proper-subdirs top-level-dir))
@@ -678,11 +709,11 @@ then set the symbol to the alist."
 
 (defun apigee-load-proxy-templates ()
   "Load proxy templates from the proxy template dir. "
-  (apigee--load-asset-templates 'apigee--proxy-template-alist "proxy" "proxies"))
+  (apigee--load-asset-templates "proxy"))
 
 (defun apigee-load-sharedflow-templates ()
   "Load templates for sharedflows from the template dir. "
-  (apigee--load-asset-templates 'apigee--sharedflow-template-alist "sharedflow" "sharedflows"))
+  (apigee--load-asset-templates "sharedflow"))
 
 (defun apigee-load-policy-templates ()
   "Load policy templates from the policy template dir.
@@ -1961,70 +1992,51 @@ from the copies."
   (when node
     (setcdr (cdr node) (list text))))
 
-(defun apigee--copy-proxy-template-files (proxy-name source destination)
-  "copy files from the SOURCE template directory to the DESTINATION directory,
-changing names and replacing / expanding things as appropriate."
-  (let ((source-apiproxy-dir (apigee--join-path-elements source "apiproxy"))
-        (dest-apiproxy-dir (apigee--join-path-elements destination "apiproxy")))
+(defun apigee--copy-bundle-template (asset-type asset-name source destination)
+  "Copy the ASSET-TYPE template in SOURCE to asset ASSET-NAME in DESTINATION.
+The top-level bundle file is renamed to ASSET-NAME.xml, and its name
+attribute and DisplayName are set to ASSET-NAME. The kind's :subdirs
+are copied, and its :after-copy function, if any, is called. See
+`apigee--asset-kinds'."
+  (let* ((bundle (apigee--asset-kind asset-type :bundle))
+         (source-bundle-dir (apigee--join-path-elements source bundle))
+         (dest-bundle-dir (apigee--join-path-elements destination bundle))
+         (file-list (apigee--proper-files source-bundle-dir ".xml")))
+    (apigee--verify-exactly-one file-list source-bundle-dir)
+    ;; create the toplevel destination directory
+    (make-directory dest-bundle-dir t)
+    ;; copy, then intelligently modify the toplevel bundle definition file
+    (let ((new-xml-file-name (apigee--join-path-elements dest-bundle-dir (concat asset-name ".xml"))))
+      (copy-file (car file-list) new-xml-file-name nil t t nil)
+      (with-current-buffer (find-file-noselect new-xml-file-name)
+        (let*
+            ((root (apigee--parse-buffer))
+             (bundle-elt (car root))
+             (display-name-elt (car (xml-get-children bundle-elt 'DisplayName))))
+          (apigee--xml-set-attribute bundle-elt 'name asset-name)
+          (apigee--xml-set-text display-name-elt asset-name)
+          (apigee--serialize-xml-elt root))
+        (save-buffer)))
+    (apigee--copy-subdirs (apigee--asset-kind asset-type :subdirs) source-bundle-dir dest-bundle-dir)
+    (when-let* ((after-copy (apigee--asset-kind asset-type :after-copy)))
+      (funcall after-copy dest-bundle-dir asset-name))))
 
-    (let ((file-list (apigee--proper-files source-apiproxy-dir ".xml")))
-      (apigee--verify-exactly-one file-list source-apiproxy-dir)
-      ;; create the toplevel destination directory
-      (make-directory dest-apiproxy-dir t)
-      ;; copy, then intelligently modify the toplevel proxy bundle definition file
-      (let ((new-xml-file-name (apigee--join-path-elements dest-apiproxy-dir (concat proxy-name ".xml"))))
-        (copy-file (car file-list) new-xml-file-name nil t t nil)
-        (with-current-buffer (find-file-noselect new-xml-file-name)
+(defun apigee--set-proxy-basepath (apiproxy-dir proxy-name)
+  "Set the BasePath to /PROXY-NAME, if APIPROXY-DIR has a single proxy endpoint."
+  (let* ((dest-proxyendpoints-dir (apigee--join-path-elements apiproxy-dir "proxies"))
+         (file-list (apigee--proper-files dest-proxyendpoints-dir ".xml")))
+    (if (not file-list)
+        (error "[apigee] cannot find XML file in %s, in `apigee--set-proxy-basepath'" dest-proxyendpoints-dir))
+    (if (= (length file-list) 1)
+        (with-current-buffer (find-file-noselect (car file-list))
           (let*
               ((root (apigee--parse-buffer))
-               (apiproxy-elt (car root))
-               (display-name-elt (car (xml-get-children apiproxy-elt 'DisplayName))))
-            (apigee--xml-set-attribute apiproxy-elt 'name proxy-name)
-            (apigee--xml-set-text display-name-elt proxy-name)
+               (proxy-endpoint-elt (car root))
+               (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
+               (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
+            (apigee--xml-set-text basepath-elt (concat "/" proxy-name))
             (apigee--serialize-xml-elt root))
-          (save-buffer))))
-
-    (apigee--copy-subdirs (list "proxies" "policies" "resources" "targets") source-apiproxy-dir dest-apiproxy-dir)
-
-    ;; if we can find a single XML file in the proxies dir, modify it
-    (let* ((dest-proxyendpoints-dir (apigee--join-path-elements dest-apiproxy-dir "proxies"))
-           (file-list (apigee--proper-files dest-proxyendpoints-dir ".xml")))
-      (if (not file-list)
-          (error "[apigee] cannot find XML file in %s, in `apigee--copy-proxy-template-files'" dest-proxyendpoints-dir))
-      (if (= (length file-list) 1)
-          (with-current-buffer (find-file-noselect (car file-list))
-            (let*
-                ((root (apigee--parse-buffer))
-                 (proxy-endpoint-elt (car root))
-                 (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
-                 (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
-              (apigee--xml-set-text basepath-elt (concat "/" proxy-name))
-              (apigee--serialize-xml-elt root)
-              )
-            (save-buffer 0))))
-    ))
-
-(defun apigee--copy-sharedflow-template-files (sf-name source destination)
-  "copy files from the SOURCE template directory to the DESTINATION directory,
-changing names and replacing / expanding things as appropriate."
-  (let ((source-sf-dir (apigee--join-path-elements source "sharedflowbundle"))
-        (dest-sf-dir (apigee--join-path-elements destination "sharedflowbundle")))
-    (let ((file-list (apigee--proper-files source-sf-dir ".xml")))
-      (apigee--verify-exactly-one file-list source-sf-dir)
-      (make-directory dest-sf-dir t)
-      ;; copy, then intelligently modify the toplevel proxy bundle definition file
-      (let ((new-xml-file-name (apigee--join-path-elements dest-sf-dir (concat sf-name ".xml"))))
-        (copy-file (car file-list) new-xml-file-name nil t t nil)
-        (with-current-buffer (find-file-noselect new-xml-file-name)
-          (let*
-              ((root (apigee--parse-buffer))
-               (sfbundle-elt (car root))
-               (display-name-elt (car (xml-get-children sfbundle-elt 'DisplayName))))
-            (apigee--xml-set-attribute sfbundle-elt 'name sf-name)
-            (apigee--xml-set-text display-name-elt sf-name)
-            (apigee--serialize-xml-elt root))
-          (save-buffer))))
-    (apigee--copy-subdirs (list "sharedflows" "policies" "resources") source-sf-dir dest-sf-dir)))
+          (save-buffer 0)))))
 
 (defun apigee--new-asset-from-template (asset-type asset-name template-alist template-name containing-dir)
   "Non-interactive function to create a new asset from a template.
@@ -2042,9 +2054,7 @@ CONTAINING-DIR - name of an existing directory into which to insert the new asse
         (error "[apigee] new-dir already exists in `apigee--new-asset-from-template'"))
     (if (not template-match)
         (error "[apigee] unknown template in `apigee--new-asset-from-template'"))
-    (let ((template-dir (cadr template-match))
-          (copy-fn (intern (format "apigee--copy-%s-template-files" asset-type))))
-      (funcall copy-fn asset-name template-dir new-dir))
+    (apigee--copy-bundle-template asset-type asset-name (cadr template-match) new-dir)
     (find-file-existing new-dir)))
 
 (defun apigee--fresh-recent-asset-homes (with-time)
@@ -2146,7 +2156,7 @@ ASSET-TYPE - either \"proxy\" or \"sharedflow\"
 PROMPT-ARG - whether invoked with a prefix
 
 "
-  (let ((alist-sym (intern (format "apigee--%s-template-alist" asset-type))))
+  (let ((alist-sym (apigee--asset-kind asset-type :templates)))
     (let ((asset-name
            (apigee--require-input
             (read-string (format "%s name?: " asset-type) nil nil nil)
