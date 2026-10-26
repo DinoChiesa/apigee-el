@@ -1,0 +1,10 @@
+<LLMTokenQuota name="##">
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <Allow count="1000" countRef="request.header.quota_count"/>
+  <Interval ref="request.header.quota_interval">1</Interval>
+  <TimeUnit ref="request.header.quota_timeunit">minute</TimeUnit>
+  <Identifier ref="request.header.user_id"/>
+  <LLMModelSource>request.header.x-model</LLMModelSource>
+  <LLMTokenUsageSource>response.body.token_usage</LLMTokenUsageSource>
+  <EnforceOnly>true</EnforceOnly>
+</LLMTokenQuota>
