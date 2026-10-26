@@ -1246,35 +1246,20 @@ filesystem, beyond the name. It's assumed you've recently called
   "Inject the policies and flow to insert a proxy revision header
 into the response. Handy when modifying an existing proxy that
 does not send back a revision header, or when creating a proxy
-from a template that doesn't send back a revision header."
+from a template that doesn't send back a revision header.
+
+Running it again on a proxy that already has the logic changes nothing."
   (interactive)
   (let ((bundle-dir (apigee--root-path-of-bundle))
-        (bundle-type (apigee--type-of-bundle))
-        (policy-names))
+        (bundle-type (apigee--type-of-bundle)))
     (if (s-equals? bundle-type "apiproxy")
-        (let ((bundle-policy-dir (concat bundle-dir bundle-type "/policies/")))
-          (dolist (am-template-file
-                   (list "clean request headers from response.xml"
-                         "inject proxy revision header.xml"))
-            (let* ((name-elements
-                    (apigee--policy-name-elements "AssignMessage" am-template-file))
-                   (name-prefix (car name-elements))
-                   (name-suffix (cadr name-elements))
-                   (policy-name (concat name-prefix "-" name-suffix))
-                   (fullpath-dest-policy-path
-                    (apigee--join-path-elements bundle-policy-dir (concat policy-name ".xml"))))
-              (setq policy-names (cons policy-name policy-names))
-              (if (not (file-exists-p fullpath-dest-policy-path))
-                  (let ((elaborated-contents
-                         (apigee--elaborate-template
-                          (apigee--join-path-elements apigee--base-template-dir "policies" "AssignMessage" am-template-file)
-                          policy-name)))
-                    ;; create the file, expand the snippet, save it.
-                    (with-current-buffer (find-file-noselect fullpath-dest-policy-path)
-                      ;; yas-expand-snippet-sync does not return until the snip is expanded.
-                      (yas-expand-snippet-sync elaborated-contents (point) (point))
-                      (save-buffer)
-                      )))))
+        (let* ((bundle-policy-dir (concat bundle-dir bundle-type "/policies/"))
+               (clean-headers-policy
+                (apigee--ensure-assign-message-policy
+                 "clean request headers from response.xml" bundle-policy-dir))
+               (revision-header-policy
+                (apigee--ensure-assign-message-policy
+                 "inject proxy revision header.xml" bundle-policy-dir)))
 
           ;; and now inject the references to these policies in the
           ;; right places in the various proxy endpoint(s).
@@ -1290,10 +1275,7 @@ from a template that doesn't send back a revision header."
                        (proxy-endpoint-elt (car root))
                        (default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))
                        (preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))
-                       (postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))
-                       (step-references
-                        (mapcar (lambda (s) (car (apigee--parse-xml (concat "  <Step>\n    <Name>" s  "</Name>\n  </Step>"))))
-                                policy-names)))
+                       (postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow))))
 
                     (unless preflow-elt
                       ;; insert PreFlow node, try one of various locations.
@@ -1309,34 +1291,6 @@ from a template that doesn't send back a revision header."
                        proxy-endpoint-elt postflow-elt
                        '(PostClientFlow Flows PreFlow DefaultFaultRule FaultRules)))
 
-                    (if preflow-elt
-                        (let* ((preflow-response-elt (car (xml-get-children preflow-elt 'Response))))
-
-                          (if (not preflow-response-elt)
-                              (let ((new-preflow-response-elt (apigee--parse-xml "<Response></Response>")))
-                                ;; insert as last element in PreFlow
-                                (setcdr (last preflow-elt) new-preflow-response-elt)
-                                (setq preflow-response-elt (car (xml-get-children preflow-elt 'Response)))))
-
-                          ;; append the appropriate step-reference as child to Response
-                          (setcdr (last preflow-response-elt)
-                                  (cons "\n    " (list (cadr step-references))))))
-
-
-                    (if postflow-elt
-                        (let ((postflow-response-elt (car (xml-get-children postflow-elt 'Response))))
-
-                          (if (not postflow-response-elt)
-                              (let ((new-postflow-response-elt (apigee--parse-xml "<Response></Response>")))
-                                ;; insert as last element in PostFlow
-                                (setcdr (last postflow-elt) new-postflow-response-elt)
-                                (setq postflow-response-elt (car (xml-get-children postflow-elt 'Response)))))
-
-                          ;; append the appropriate step-reference as child to Response
-                          (setcdr (last postflow-response-elt)
-                                  (cons "\n    " (list (car step-references))))))
-
-
                     (unless default-faultrule-elt
                       ;; insert DefaultFaultRule node. As above, try one of various locations.
                       (setq default-faultrule-elt
@@ -1345,13 +1299,66 @@ from a template that doesn't send back a revision header."
                        proxy-endpoint-elt default-faultrule-elt
                        '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
 
-                    (if default-faultrule-elt
-                        ;; append the step-references as children to Response
-                        (setcdr (last default-faultrule-elt)
-                                (cons "\n    " (list (car step-references)))))
+                    ;; Every append is evaluated; any one of them adding a Step
+                    ;; means the file changed. A newly inserted flow element
+                    ;; always gets a Step, so it counts too.
+                    (let ((changes
+                           (list
+                            (apigee--xml-append-step
+                             (apigee--xml-flow-response preflow-elt) clean-headers-policy)
+                            (apigee--xml-append-step
+                             (apigee--xml-flow-response postflow-elt) revision-header-policy)
+                            (apigee--xml-append-step
+                             default-faultrule-elt revision-header-policy))))
+                      (if (seq-some #'identity changes)
+                          (progn
+                            (apigee--serialize-xml-elt root)
+                            (save-buffer 0))
+                        (message "[apigee] %s already has the revision logic"
+                                 (file-name-nondirectory proxyendpoint-file)))))))))))))
 
-                    (apigee--serialize-xml-elt root))
-                  (save-buffer 0)))))))))
+(defun apigee--ensure-assign-message-policy (template-file policy-dir)
+  "Create an AssignMessage policy from TEMPLATE-FILE in POLICY-DIR, if absent.
+The policy name is derived from TEMPLATE-FILE. Return the policy name."
+  (let* ((name-elements (apigee--policy-name-elements "AssignMessage" template-file))
+         (policy-name (concat (car name-elements) "-" (cadr name-elements)))
+         (fullpath-dest-policy-path
+          (apigee--join-path-elements policy-dir (concat policy-name ".xml"))))
+    (unless (file-exists-p fullpath-dest-policy-path)
+      (let ((elaborated-contents
+             (apigee--elaborate-template
+              (apigee--join-path-elements apigee--base-template-dir "policies" "AssignMessage" template-file)
+              policy-name)))
+        ;; create the file, expand the snippet, save it.
+        (with-current-buffer (find-file-noselect fullpath-dest-policy-path)
+          ;; yas-expand-snippet-sync does not return until the snip is expanded.
+          (yas-expand-snippet-sync elaborated-contents (point) (point))
+          (save-buffer))))
+    policy-name))
+
+(defun apigee--xml-flow-response (flow)
+  "Return the Response child of the xml.el node FLOW, adding one if missing."
+  (or (car (xml-get-children flow 'Response))
+      (let ((response (car (apigee--parse-xml "<Response></Response>"))))
+        ;; insert as last element in the flow
+        (setcdr (last flow) (list response))
+        response)))
+
+(defun apigee--xml-step-names (parent)
+  "Return the policy names referenced by the Step children of xml.el node PARENT."
+  (mapcar (lambda (step)
+            (string-trim
+             (or (car (xml-node-children (car (xml-get-children step 'Name)))) "")))
+          (xml-get-children parent 'Step)))
+
+(defun apigee--xml-append-step (parent policy-name)
+  "Append a Step for POLICY-NAME to xml.el node PARENT, unless one is there.
+Return non-nil if PARENT was changed."
+  (unless (member policy-name (apigee--xml-step-names parent))
+    (let ((step (car (apigee--parse-xml
+                      (concat "  <Step>\n    <Name>" policy-name "</Name>\n  </Step>")))))
+      (setcdr (last parent) (list "\n    " step))
+      t)))
 
 
 (defun apigee--xml-insert-child-before (node new-child before-names)
