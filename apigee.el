@@ -1,14 +1,12 @@
-;;; -*- coding: utf-8; lexical-binding: t;  -*-
-
-;;; apigee.el --- utility functions for working with Apigee platform in emacs
+;;; apigee.el --- Work with Apigee API proxy and sharedflow bundles  -*- coding: utf-8; lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2017-2025 Dino Chiesa and Google, LLC.
+;; Copyright (C) 2017-2026 Dino Chiesa and Google, LLC.
 ;;
 ;; Author     : Dino Chiesa
 ;; Maintainer : Dino Chiesa <dchiesa@google.com>
 ;; Created    : May 2017
-;; Modified   : May 2025
-;; Version    : 1.3
+;; Modified   : October 2026
+;; Version    : 2.0
 ;; Keywords   : apigee
 ;; Package-Requires: ((emacs "28.1") (yasnippet "0.14.0"))
 ;; License    : Apache 2.0
@@ -17,15 +15,36 @@
 ;;
 ;;; Commentary:
 ;;
-;; This module defines a few elisp functions that are handy for working
-;; with API Proxy definition bundles within emacs. Per ejemplo,
-;;  - creating a new blank proxy from a template
-;;  - adding a new policy to a bundle
+;; This module defines commands that are handy for working with Apigee
+;; API proxy and sharedflow bundles, in their exploded form, within
+;; Emacs. Per ejemplo,
+;;  - creating a new proxy or sharedflow from a template:
+;;      M-x apigee-new-proxy, M-x apigee-new-sharedflow
+;;    (with C-u, also choose the directory in which to store it)
+;;  - adding a policy or a target from a template, renaming a policy, and
+;;    injecting a proxy-revision header:
+;;      M-x apigee-add-policy, M-x apigee-add-target,
+;;      M-x apigee-rename-policy, M-x apigee-inject-proxy-revision-logic
+;;  - linting with apigeelint, and validating against the policy schema:
+;;      M-x apigee-lint-asset, M-x apigee-validate-xml-for-asset
+;;  - importing and deploying with apigeecli:
+;;      M-x apigee-import-proxy, M-x apigee-deploy-proxy,
+;;      M-x apigee-import-and-deploy-proxy
+;;    (these work for sharedflows too)
 ;;
-;; Future possibilities:
-;;  - adding a new target to a bundle
-;;  - zipping and importing a bundle
-;;  - validating a bundle
+;; Run the bundle commands from any directory inside the bundle, for
+;; example a Dired buffer on ../apiproxy. With C-u, the lint, validate,
+;; import and deploy commands let you edit the command line first.
+;;
+;; Templates live in the templates/ directory next to this file, or in the
+;; directory chosen with M-x apigee-load-templates. The programs, command
+;; lines, organization, environment and so on are settings; see
+;; M-x customize-group RET apigee. The organization, environment, service
+;; account, template directory and recently used directories are also
+;; saved in apigee-el.dat in `user-emacs-directory'.
+;;
+;; Loading this file has no side effects; `apigee-setup', which every
+;; command calls first, restores the saved settings and loads templates.
 ;;
 ;; To use this module, assuming ~/elisp/apigee contains apigee.el,
 ;; put this in your .emacs file:
@@ -37,17 +56,7 @@
 ;;   :config
 ;;     ...)
 ;;
-;; Then, you can invoke various commands:
-;;
-;; To add a new proxy:
-;;   M-x apigee-new-proxy
-;;
-;; To specify the directory in which to store the new proxy:
-;;   C-u M-x apigee-new-proxy
-;;
-;; To add a policy to an existing proxy, open a dired buffer to ../apiproxy and:
-;;   M-x apigee-add-policy
-;;
+;; The tests are in apigee-tests.el.
 ;;
 ;;; License
 ;;
@@ -66,6 +75,8 @@
 ;;    limitations under the License.
 ;;
 ;;; TODO: see todo file
+
+;;; Code:
 
 (require 'seq)
 (require 'xml)
@@ -94,10 +105,10 @@
   "Cache for memoizing functions with timeouts.")
 
 (defvar apigee--base-template-dir nil
-  "The directory from which policy templates have been most recently loaded")
+  "The directory from which templates were most recently loaded.")
 
 (defvar apigee--recently-used-asset-homes nil
-  "a list of directories recently used to store API Proxies.")
+  "Directories recently used to store new assets, with the time of use.")
 
 (define-obsolete-variable-alias 'apigee--verbose-logging 'apigee-verbose-logging "2026-10-26")
 (defcustom apigee-verbose-logging nil
@@ -173,11 +184,11 @@ Each value is a string, a list, or a function returning one of those. A
 string is a program name or path (spaces in the path are fine), or a
 program followed by arguments separated by spaces. A list is a program
 and its arguments. A program without a directory is looked up with
-`executable-find'. You can set the path explicitly in your emacs init
+`executable-find'. You can set the path explicitly in your Emacs init
 file, for example,
-  (setf (alist-get \='apigeecli apigee-programs-alist)
+  (setf (alist-get \\='apigeecli apigee-programs-alist)
         \"~/.apigeecli/bin/apigeecli\"
-        (alist-get \='gcloud apigee-programs-alist)
+        (alist-get \\='gcloud apigee-programs-alist)
         \"~/gcloud-sdk/bin/gcloud\")"
   :type '(alist :key-type (symbol :tag "Program key")
                 :value-type (choice (string :tag "Program (and arguments)")
@@ -199,7 +210,7 @@ file, for example,
     )
   "Placeholders used in `apigee-commands-alist', as %KEY.
 Each value is a function called with WANT-PROMPT. It returns a string
-(one word), a list of strings, or nil or \"\" (no words). The token, %t,
+\(one word), a list of strings, or nil or \"\" (no words). The token, %t,
 is filled in last, after the user has had a chance to edit the command."
   )
 
@@ -347,24 +358,26 @@ templates/policies. A type with no entry uses the directory name.")
   :type 'string)
 
 (defvar apigee--policy-template-alist nil
-  "An alist. For each element, the cons is a policy type name, eg
-\"AccessEntity\", and the cadr is a list of strings, each of which is a
-filename referring to a template for the policy. The actual filename
-will be in (apigee--join-path-elements apigee--base-template-dir
-\"policies\" policy-type filename)")
+  "The loaded policy templates, an alist.
+Each element is (POLICY-TYPE (FILENAME...)), where POLICY-TYPE is a
+policy type name, e.g. \"AccessEntity\", and each FILENAME names a
+template for that policy type. The full path of a template is
+\\(apigee--join-path-elements apigee--base-template-dir
+ \"policies\" POLICY-TYPE FILENAME).")
 
 (defvar apigee--proxy-template-alist nil
-  "An alist, relating a name to a proxy template. The cadr of each entry is a
-string, a directory name, containing the exploded proxy template.")
+  "The loaded proxy templates, an alist.
+Each element is (NAME DIRECTORY), where DIRECTORY holds the exploded
+proxy template.")
 
 (defvar apigee--target-template-alist nil
-  "An alist, relating a name to a target template. The cadr of each entry is a
-string, a file name, containing the target template.")
+  "The loaded target templates, an alist.
+Each element is (NAME FILE), where FILE holds the target template.")
 
 (defvar apigee--sharedflow-template-alist nil
-  "An alist, relating a name to a template for a sharedflow. The cadr of each
-entry is a string, a directory name, containing the exploded sharedflow
-template.")
+  "The loaded sharedflow templates, an alist.
+Each element is (NAME DIRECTORY), where DIRECTORY holds the exploded
+sharedflow template.")
 
 (defconst apigee--asset-kinds
   '(("proxy"
@@ -473,8 +486,9 @@ filled them in and the snippet exits."
       (recursive-edit))))
 
 (defun apigee--xml-parse-tag-1 (&optional parse-dtd parse-ns)
-  "Like `xml-parse-tag-1', but keep XML comments as (nil . \"<!-- ... -->\") nodes.
-Installed only temporarily, by `apigee--with-comment-preserving-xml'."
+  "Like `xml-parse-tag-1', but keep comments as (nil . \"<!-- ... -->\") nodes.
+PARSE-DTD and PARSE-NS are as for `xml-parse-tag-1'. Installed only
+temporarily, by `apigee--with-comment-preserving-xml'."
   (let* ((xml-validating-parser (or parse-dtd xml-validating-parser))
          (xml-ns
           (cond ((eq parse-ns 'symbol-qnames)
@@ -575,7 +589,8 @@ Installed only temporarily, by `apigee--with-comment-preserving-xml'."
 
 (defun apigee--xml-print-internal (xml indent-string)
   "Like `xml-debug-print-internal', but print (nil . COMMENT) nodes as-is.
-Installed only temporarily, by `apigee--with-comment-preserving-xml'."
+Insert the xml.el node XML, indented by INDENT-STRING. Installed only
+temporarily, by `apigee--with-comment-preserving-xml'."
   (let ((tree xml)
         attlist)
     (insert indent-string ?< (symbol-name (xml-node-name tree)))
@@ -618,22 +633,23 @@ Unlike a global redefinition, this affects only apigee's own XML calls."
    (xml-parse-region (point-min) (point-max))))
 
 (defun apigee-get-lint-exclusions (&optional want-prompt)
-  "get a string representing a comma-separated set of plugins to
-exclude from apigeelint. Uses a cached value, or, if WANT-PROMPT, will
-prompt the user."
+  "Return the comma-separated plugins to exclude from apigeelint.
+Use `apigee-lint-exclusions', prompting for a new value if WANT-PROMPT
+or if it is blank."
   (interactive "P")
   (apigee-setup)
   (apigee--get-or-prompt 'apigee-lint-exclusions "exclusions" want-prompt))
 
 
 (defun apigee--path-to-settings-file ()
-  "a function rturning the path to the settings file for apigee.el"
+  "Return the path to the settings file for apigee.el."
   (apigee--join-path-elements user-emacs-directory apigee--settings-file-base-name))
 
 (defun apigee--restore-state ()
-  "function expected to be called on initial module load, that restores the
-previous state of the module. Things like the most recently used
-apiproxy home, or the most recently loaded templates directory.
+  "Restore the settings saved by `apigee--persist-state'.
+Called by `apigee-setup'. The settings are the variables in
+`apigee--list-of-vars-to-store-and-restore', such as the most recently
+used asset homes and template directory.
 
 A variable that already has a non-nil value, for example one set in the
 init file, keeps it; only unset variables are restored."
@@ -658,12 +674,11 @@ init file, keeps it; only unset variables are restored."
       )))
 
 (defun apigee--persist-state ()
-  "This function stores the state of the module. Things like the most
-recently used apiproxy home, the most recently used org and environment,
-or the most recently loaded templates directory. See the list of
-settings in `apigee--list-of-vars-to-store-and-restore'.
-
-It is expected that this function will be called periodically."
+  "Save the settings to the settings file.
+The settings are the variables in
+`apigee--list-of-vars-to-store-and-restore': the most recently used
+asset homes, organization and environment, the template directory, and
+so on. Called periodically, and when Emacs exits."
   (setq apigee--recently-used-asset-homes (apigee--fresh-recent-asset-homes t))
   (let ((dat-file-path (apigee--path-to-settings-file))
         (alist-to-write nil))
@@ -698,8 +713,7 @@ It is expected that this function will be called periodically."
 ;;            (cdr dirs))))
 
 (defun apigee--join-path-elements (root &rest dirs)
-  "Joins a series of directories together, starting at the root, inserting
-slashes as necessary, as with Python's os.path.join."
+  "Join ROOT and DIRS with slashes, as Python's os.path.join does."
   (apply #'file-name-concat root dirs))
 
 (defun apigee--proper-subdirs (containing-dir)
@@ -727,37 +741,37 @@ Optionally filters on files with the given extension or SUFFIX."
 
 (defun apigee--sort-by-string-car (list-o-lists)
 
-  "sort LIST-O-LISTS, a list of lists, each of the form (STRING (LIST)),
-lexicographically by the car of each element, which is a string."
+  "Sort LIST-O-LISTS by the string that is the car of each element."
   (sort list-o-lists
         (lambda (a b) (string< (car a) (car b) ))))
 
 (defun apigee--get-target-template-filename (template-filename)
-  "return the fullpath name of the target template file.
-"
+  "Return the full path of the target template TEMPLATE-FILENAME.
+A relative name is resolved in the targets directory of
+`apigee--base-template-dir'."
   (if (string-prefix-p "/" template-filename)
       template-filename
     (apigee--join-path-elements apigee--base-template-dir "targets" template-filename)))
 
 
 (defun apigee--get-template-contents (fullpath-template-filename)
-  "return the contents of the template file."
+  "Return the contents of the template file FULLPATH-TEMPLATE-FILENAME."
   (with-temp-buffer
     (insert-file-contents fullpath-template-filename)
     (buffer-substring-no-properties (point-min) (point-max))))
 
 (defun apigee--templates-for-one-policy-type (policy-type-directory)
-  "loads the policy templates for one POLICY-TYPE-DIRECTORY, which is a fully-
-qualified directory, ending in a policy-type name eg AccessEntity.  This
-is used to populate the menu of available policy templates."
+  "Return (POLICY-TYPE (FILENAME...)) for POLICY-TYPE-DIRECTORY.
+POLICY-TYPE-DIRECTORY is a full path ending in a policy type name, e.g.
+AccessEntity. The FILENAMEs are its templates, sorted. This populates
+the menu of available policy templates."
   (list (file-name-nondirectory policy-type-directory)
         (sort (mapcar #'file-name-nondirectory
                       (apigee--proper-files policy-type-directory ".xml"))
               #'string<)))
 
 (defun apigee--policy-template-count ()
-  "returns the total number of policy templates available in
-`apigee--policy-template-alist'"
+  "Return the number of policy templates in `apigee--policy-template-alist'."
   (apply '+
          (mapcar (lambda (item) (length (cadr item)))
                  apigee--policy-template-alist)))
@@ -778,8 +792,9 @@ of templates: the length of the alist, or what COUNT returns for it."
     (list label (funcall (or count #'length) alist) top-level-dir)))
 
 (defun apigee--load-asset-templates (asset-type)
-  "Load the templates for ASSET-TYPE, a key in `apigee--asset-kinds',
-from the template dir, then set the kind's :templates variable to the alist."
+  "Load the templates for ASSET-TYPE, a key in `apigee--asset-kinds'.
+Set the kind's :templates variable to the alist of templates found in
+its subdirectory of the template dir."
   (apigee--load-template-alist
    (apigee--asset-kind asset-type :templates) asset-type
    (apigee--asset-kind asset-type :template-subdir)
@@ -787,11 +802,11 @@ from the template dir, then set the kind's :templates variable to the alist."
    (lambda (dir) (list (file-name-nondirectory dir) dir))))
 
 (defun apigee-load-proxy-templates ()
-  "Load proxy templates from the proxy template dir. "
+  "Load the proxy templates from the proxy template directory."
   (apigee--load-asset-templates "proxy"))
 
 (defun apigee-load-sharedflow-templates ()
-  "Load templates for sharedflows from the template dir. "
+  "Load the sharedflow templates from the sharedflow template directory."
   (apigee--load-asset-templates "sharedflow"))
 
 (defun apigee-load-policy-templates ()
@@ -837,6 +852,7 @@ resulting menu."
    (lambda (file) (list (file-name-base file) file))))
 
 
+;;;###autoload
 (defun apigee-load-templates (top-level-dir &optional interactive)
   "Load the templates from the top-level directory TOP-LEVEL-DIR.
 
@@ -878,8 +894,9 @@ when both are empty, never the empty string."
       response-val)))
 
 (defun apigee-get-organization (&optional want-prompt)
-  "Returns the org to use for import and deployment. Uses a cached
-value, or, if WANT-PROMPT, will prompt the user."
+  "Return the organization to use for import and deployment.
+Use `apigee-organization', prompting for a new value if WANT-PROMPT or
+if it is blank."
   (interactive "P")
   (apigee-setup)
   (let ((org (apigee--get-or-prompt 'apigee-organization "organization name" want-prompt)))
@@ -888,8 +905,9 @@ value, or, if WANT-PROMPT, will prompt the user."
     org))
 
 (defun apigee-get-environment (&optional want-prompt)
-  "Returns the environment to use for deployment. Uses a cached value,
-or, if WANT-PROMPT, will prompt the user."
+  "Return the environment to use for deployment.
+Use `apigee-environment', prompting for a new value if WANT-PROMPT or if
+it is blank."
   (interactive "P")
   (apigee-setup)
   (let ((env (apigee--get-or-prompt 'apigee-environment "environment name" want-prompt)))
@@ -898,18 +916,18 @@ or, if WANT-PROMPT, will prompt the user."
     env))
 
 (defun apigee-get-service-account-args-for-deployment (&optional want-prompt)
-  "Returns the arguments to use on the apigeecli command line for the
-service account. Uses a cached value, or, if WANT-PROMPT, will
-prompt the user. The format of the service account must be
-{ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com . If the format is just
-the short version, this fn will append the PROJECT and suffix, using the
-Apigee organization name as the PROJECT. That holds for Apigee X and
-hybrid, where the organization is named after its GCP project.
+  "Return the apigeecli arguments for the deployment service account.
+Use `apigee-service-account', prompting for a new value if WANT-PROMPT
+or if it is blank. The format of the service account must be
+{ACCOUNT_ID}@{PROJECT}.iam.gserviceaccount.com. If the format is just
+the short version, append the PROJECT and suffix, using the Apigee
+organization name as the PROJECT. That holds for Apigee X and hybrid,
+where the organization is named after its GCP project.
 
 Enter \"-\" to deploy without a service account. That choice is stored
 like any other value, so it is not asked again.
 
-Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
+Return the arguments (\"--sa\" EMAIL), or nil for no service account."
   (interactive "P")
   (apigee-setup)
   (let ((sa-local (apigee--get-or-prompt 'apigee-service-account "service account" want-prompt))
@@ -922,7 +940,7 @@ Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
       (list "--sa" sa-local))))
 
 (defun apigee--trim-xml-suffix (s)
-  "trims the .xml suffix from a template file name"
+  "Return S without a trailing .xml."
   (string-remove-suffix ".xml" s))
 
 ;; 20250527-1816 - not needed now that I'm using the minibuffer
@@ -936,7 +954,9 @@ Returns the arguments (\"--sa\" EMAIL), or nil for no service account."
 ;;     t))
 
 (defun apigee--find-bundle (flavor) ;; "apiproxy" or "sharedflowbundle"
-  "returns list of (PATH TYPE) if a bundle is found in the current directory."
+  "Return (PATH TYPE) if `default-directory' is in a bundle of type FLAVOR.
+FLAVOR is \"apiproxy\" or \"sharedflowbundle\". PATH is the directory
+that contains the bundle directory."
   (let ((right-here (concat (file-name-directory default-directory) flavor)))
     (if (file-directory-p right-here)
         (list (file-name-directory default-directory) flavor)
@@ -989,15 +1009,17 @@ With no SUBDIRS, return the bundle directory itself, e.g. ROOT/apiproxy/."
   (not (file-exists-p (file-name-concat targets-dir (concat tname ".xml")))))
 
 (defun apigee--suggested-target-name (targets-dir template-name)
-  "suggest a name for a target given a TEMPLATE-NAME for the target.
-Based on file availability in TARGETS-DIR."
+  "Suggest a name for a target made from the template TEMPLATE-NAME.
+The name is TEMPLATE-NAME-1, TEMPLATE-NAME-2, ..., whichever is the
+first not used in TARGETS-DIR."
   (apigee--first-available-name
    template-name (lambda (name) (apigee--target-name-is-available targets-dir name)) 1))
 
 ;;;###autoload
 (defun apigee-add-target ()
-  "Invoke this interactively, and the fn will prompt the user to
-choose a target type to insert."
+  "Add a target to the current API proxy, from a template.
+Prompt for the target template and a name for the target, create the
+target file, and expand the template into it."
   (interactive)
   (apigee-setup)
   (apigee--require-apiproxy "Adding a target")
@@ -1043,11 +1065,9 @@ choose a target type to insert."
             ))))))
 
 (defun apigee--transform-policy-alist (input-alist)
-  "Transforms the given alist according to the specified format.
+  "Transform INPUT-ALIST for `apigee--select-cascaded-choices'.
 Input: ((KEY (SUBKEY1.xml SUBKEY2.xml ...)) ...)
-Output: ((KEY . ((SUBKEY1) (SUBKEY2) ...)) ...)
-
-Suitable for use with `apigee--select-cascaded-choices'. "
+Output: ((KEY . ((SUBKEY1) (SUBKEY2) ...)) ...)"
   (mapcar
    (lambda (top-level-entry)
      (let ((key (car top-level-entry))
@@ -1118,8 +1138,9 @@ Returns the path of selected items as a list of strings, or nil if aborted."
     user-final-selection))
 
 (defun apigee--prompt-user-with-policy-choices ()
-  "Prompt the user with the available choices. In this context, the
-available choices is the hierarchical list of available policies."
+  "Prompt for a policy template, as (POLICY-TYPE TEMPLATE-NAME).
+The choices are the policy types, then the templates for the chosen
+type."
   (interactive)
   (apigee--select-cascaded-choices
    (apigee--transform-policy-alist apigee--policy-template-alist)))
@@ -1139,11 +1160,11 @@ Or resources/py, or resources/xsl. PREFIX defaults to Javascript."
       name)))
 
 (defun apigee--policy-name-is-available (policies-dir pname)
-  "Return true if the passed policy name PNAME is unused, in other words
-if no file exists by that name in POLICIES-DIR."
+  "Return non-nil if no policy named PNAME exists in POLICIES-DIR."
   (not (file-exists-p (file-name-concat policies-dir (concat pname ".xml")))))
 
 (defun apigee--string-is-uppercase-acronym-p (str)
+  "Return non-nil if STR is all uppercase letters, digits and hyphens."
   (let ((case-fold-search nil))
     (string-match-p "\\`[-A-Z0-9]*\\'" str)))
 
@@ -1152,7 +1173,9 @@ if no file exists by that name in POLICIES-DIR."
   (if (apigee--string-is-uppercase-acronym-p str) str (apigee--capitalize-first str)))
 
 (defun apigee--policy-name-elements (ptype policy-template-filename)
-  "Returns a list containing name elements, (PREFIX SUFFIX), for a policy file."
+  "Return (PREFIX SUFFIX) for naming a policy of type PTYPE.
+PREFIX abbreviates PTYPE, per `apigee--policytype-shortform'. SUFFIX
+comes from the words of the template file name POLICY-TEMPLATE-FILENAME."
   (let* ((basename (file-name-sans-extension (file-name-nondirectory policy-template-filename)))
          (name-elements (split-string basename " "))
          (is-jwt (or (string= ptype "JWT") (string= ptype "JWS")))
@@ -1165,10 +1188,9 @@ if no file exists by that name in POLICIES-DIR."
     (list name-prefix name-suffix)))
 
 (defun apigee--suggested-policy-name (policies-dir ptype filename)
-  "Returns a string that contains a default policy name. Derives the name
-from PTYPE policy type, and FILENAME which is the fully-qualified filename.
-Uses a counter, so the name is unused in POLICIES-DIR.
-"
+  "Suggest a name for a new policy of type PTYPE, from template FILENAME.
+The name is PREFIX-SUFFIX, from `apigee--policy-name-elements', with
+-1, -2, ... appended if needed so that it is unused in POLICIES-DIR."
   (let* ((name-elements (apigee--policy-name-elements ptype filename))
          (name-prefix (car name-elements))
          (name-suffix (cadr name-elements)))
@@ -1180,18 +1202,14 @@ Uses a counter, so the name is unused in POLICIES-DIR.
   "Return the output of gcloud auth print-access-token, uncached."
   (let* ((gcloud-pgm (alist-get 'gcloud apigee-programs-alist))
          (words (or (apigee--resolve-program gcloud-pgm)
-                    (error "cannot resolve %s" gcloud-pgm))))
+                    (error "Cannot resolve %s" gcloud-pgm))))
     (car (last (apply #'process-lines (car words)
                       (append (cdr words) '("auth" "print-access-token")))))))
 
 (defun apigee--memoize-with-timeout (fn &optional timeout-in-seconds)
-  "Memoize a function with a timeout.
-
-  FUNCTION is the function to memoize.
-  TIMEOUT-IN-SECONDS is the cache expiration time in seconds (default:
-600 seconds - 10 minutes).
-
-  Returns a memoized function."
+  "Return a memoized version of the function FN.
+A cached result is reused for TIMEOUT-IN-SECONDS (default: 600
+seconds, 10 minutes)."
   (let ((timeout (or timeout-in-seconds (* 10 60)))  ; Default to 10 minutes
         (lexically-bound-fn fn))
     (lambda (&rest args)
@@ -1310,13 +1328,14 @@ becomes an absolute path, and arguments starting with ~ are expanded."
 (defun apigee--expand-word (word want-prompt)
   "Return the list of words that WORD expands to.
 A word %KEY expands through `apigee-programs-alist' or
-`apigee-placeholders-alist'; any other word stands for itself."
+`apigee-placeholders-alist'; any other word stands for itself.
+WANT-PROMPT is passed to the placeholder functions."
   (let ((key (and (string-prefix-p "%" word) (intern (substring word 1)))))
     (cond
      ((and key (assq key apigee-programs-alist))
       (let ((program (alist-get key apigee-programs-alist)))
         (or (apigee--resolve-program program)
-            (error "cannot resolve program '%s'" program))))
+            (error "Cannot resolve program `%s'" program))))
      ((and key (assq key apigee-placeholders-alist))
       (let ((value (funcall (alist-get key apigee-placeholders-alist) want-prompt)))
         (cond ((stringp value) (and (not (string-empty-p value)) (list value)))
@@ -1335,7 +1354,8 @@ The keywords :and and :token stand for \"&&\" and the unexpanded %t."
 
 (defun apigee--command-words (words want-prompt defer-token)
   "Expand the placeholders in the command template WORDS.
-With DEFER-TOKEN, leave the token placeholder %t unexpanded, as :token."
+WANT-PROMPT is passed to the placeholder functions. With DEFER-TOKEN,
+leave the token placeholder %t unexpanded, as :token."
   (mapcan (lambda (word)
             (cond ((member word '("&&" "%c")) (list :and))
                   ((and defer-token (equal word "%t")) (list :token))
@@ -1344,8 +1364,9 @@ With DEFER-TOKEN, leave the token placeholder %t unexpanded, as :token."
 
 (defun apigee--expand-command-string (template want-prompt defer-token)
   "Expand the %KEY placeholders in the shell command line TEMPLATE.
-Each expansion is shell-quoted; %c becomes \"&&\". With DEFER-TOKEN,
-%t is left as it is."
+Each expansion is shell-quoted; %c becomes \"&&\". WANT-PROMPT is
+passed to the placeholder functions. With DEFER-TOKEN, %t is left as it
+is."
   (let ((command template))
     (dolist (key (append (mapcar #'car apigee-programs-alist)
                          (mapcar #'car apigee-placeholders-alist)))
@@ -1416,9 +1437,7 @@ is masked too."
 (put 'apigee--mask-command-echo 'permanent-local-hook t)
 
 (defun apigee--has-same-bundle-root (root-dir-in-question)
-  "predicate called in each unsaved buffer.  Returns t if the buffer
-is part of an apiproxy, and if the ROOT-DIR-IN-QUESTION is the same
-as the root of the current buffer.
+  "Return non-nil if the current buffer's bundle root is ROOT-DIR-IN-QUESTION.
 Used as a predicate for `save-some-buffers'."
   (let ((bundle-dir (plist-get (apigee--bundle) :root)))
     (and bundle-dir
@@ -1426,7 +1445,10 @@ Used as a predicate for `save-some-buffers'."
          (equal bundle-dir root-dir-in-question))))
 
 (defun apigee--run-command-for-proxy (label command-symbol &optional want-prompt)
-  "Run a command for the current API proxy or sharedflow."
+  "Run COMMAND-SYMBOL from `apigee-commands-alist' for the current bundle.
+The output goes to a compilation buffer named after LABEL, the command
+and the bundle. With WANT-PROMPT, prompt for values such as the
+organization, and let the user edit the command first."
   (apigee-setup)
   (if-let* ((bundle-dir (plist-get (apigee--bundle) :root)))
       (if-let* ((bundle-name (apigee--bundle-name))
@@ -1445,6 +1467,7 @@ Used as a predicate for `save-some-buffers'."
                     ;;(process-environment '("PATH=foobar"))
                     )
                 ;; Chapter 1. trying to get compilation-start over Tramp to use bash
+                ;; 20261026: outcome still unknown; nothing tests this over Tramp.
                 (when remote-host
                   (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
                          (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
@@ -1465,10 +1488,18 @@ Used as a predicate for `save-some-buffers'."
                 ;; experience is better.  The one downside: the compilation is shown in
                 ;; comint mode, which I theoretically don't want - it's not
                 ;; interactive. But I don't care that much.
+                ;;
+                ;; 20261026: outcome. With t, the masking works through
+                ;; `comint-output-filter-functions'. `compilation-filter-hook'
+                ;; never runs in comint mode, so it was never what masked the
+                ;; token.
                 (with-connection-local-variables
                  (let (
                        ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
                        ;; Not sure which, if any, are required here.
+                       ;; 20261026: they are declared special at the top of the
+                       ;; file, so these bindings are dynamic, compiled or not.
+                       ;; Whether Tramp needs them is still untested.
                        (tramp-default-remote-shell "/bin/bash")
                        (tramp-encoding-shell "/bin/bash"))
                    (let* ((actual-command-to-run
@@ -1491,7 +1522,7 @@ Used as a predicate for `save-some-buffers'."
                        (add-hook 'comint-output-filter-functions #'apigee--mask-secrets nil t)
                        (add-hook 'compilation-start-hook #'apigee--mask-command-echo nil t)
                        (setq buffer-read-only t))))))))
-        (error "Can't find bundle name, or can't resolve command."))
+        (error "Can't find bundle name, or can't resolve command"))
     (user-error "[apigee] You do not appear to be in an API proxy or sharedflow directory")))
 
 
@@ -1512,23 +1543,22 @@ Used as a predicate for `save-some-buffers'."
 ;;         (replace-match "--token ***masked***")))
 ;;     (setq buffer-read-only t)))))))
 
+;;;###autoload
 (defun apigee-lint-asset (want-prompt)
   "Run apigeelint on the current API proxy or sharedflow.
-
-With a prefix argument (e.g., C-u), prompt the user to edit
-the command before running it."
+With WANT-PROMPT (a prefix argument, \\[universal-argument]), prompt the
+user to edit the command before running it."
   (interactive "P")
   (apigee--run-command-for-proxy "apigeelint" 'lint want-prompt))
 
+;;;###autoload
 (defun apigee-validate-xml-for-asset (want-prompt)
   "Run the XML Validator on the current API proxy or sharedflow.
-
-With a prefix argument (e.g., C-u), prompt the user to edit
-the command before running it."
+With WANT-PROMPT (a prefix argument, \\[universal-argument]), prompt the
+user to edit the command before running it."
   (interactive "P")
   (apigee--run-command-for-proxy "validate" 'validate want-prompt))
 
-;;;###autoload
 (defun apigee--bundle-command (action)
   "Return the `apigee-commands-alist' key for ACTION in the current bundle.
 ACTION is import, deploy or import-and-deploy; the asset kind's
@@ -1541,34 +1571,40 @@ ACTION, and let the command report that."
         (alist-get action (apigee--asset-kind kind :commands))
       action)))
 
+;;;###autoload
 (defun apigee-import-and-deploy-proxy (want-prompt)
   "Import AND deploy the API proxy or sharedflow.
-
-With a prefix argument (e.g., C-u), prompt the user for org/env
-before running it."
+With WANT-PROMPT (a prefix argument, \\[universal-argument]), prompt the
+user for org/env, and to edit the command, before running it."
   (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" (apigee--bundle-command 'import-and-deploy) want-prompt))
 
 ;;;###autoload
 (defun apigee-import-proxy (want-prompt)
-  "Import the API proxy or sharedflow."
+  "Import the API proxy or sharedflow.
+With WANT-PROMPT (a prefix argument), prompt the user for org/env, and
+to edit the command, before running it."
   (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" (apigee--bundle-command 'import) want-prompt))
 
 ;;;###autoload
 (defun apigee-deploy-proxy (want-prompt)
-  "Deploy the API proxy or sharedflow. This doesn't use the configuration in the
-filesystem, beyond the name. It's assumed you've recently called
-`apigee-import-proxy', and there is a revision to deploy."
+  "Deploy the API proxy or sharedflow.
+This doesn't use the configuration in the filesystem, beyond the name.
+It's assumed you've recently called `apigee-import-proxy', and there is
+a revision to deploy. With WANT-PROMPT (a prefix argument), prompt the
+user for org/env, and to edit the command, before running it."
   (interactive "P") ;; if want-prompt is non-nil, prompt the user for org/env
   (apigee--run-command-for-proxy "apigeecli" (apigee--bundle-command 'deploy) want-prompt))
 
 ;;;###autoload
 (defun apigee-inject-proxy-revision-logic ()
-  "Inject the policies and flow to insert a proxy revision header
-into the response. Handy when modifying an existing proxy that
-does not send back a revision header, or when creating a proxy
-from a template that doesn't send back a revision header.
+  "Make the current proxy return its revision in a response header.
+Add two AssignMessage policies, and references to them in the flows of
+each proxy endpoint.
+Handy when modifying an existing proxy that does not send back a
+revision header, or when creating a proxy from a template that doesn't
+send back a revision header.
 
 Running it again on a proxy that already has the logic changes nothing."
   (interactive)
@@ -1738,20 +1774,17 @@ of them, NEW-CHILD becomes its last child."
 
 
 (defun apigee--elaborate-template (fullpath-template-filename thing-name)
-  "returns the contents of the named template with the ## placeholders
-replaced."
+  "Return the template FULLPATH-TEMPLATE-FILENAME with ## replaced.
+Each ## is replaced with THING-NAME."
   (string-replace "##" thing-name (apigee--get-template-contents fullpath-template-filename)))
 
 
 ;;;###autoload
 (defun apigee-add-policy ()
-  "Invoke this interactively, and the fn will prompt the user to
-choose a policy type to insert. It will then ask for a name for
-the policy, create the appropriate XML file, and using
-yas-snippet, expand the template associated to the chosen policy,
-into the policy file. It then will open any resource files as
-appropriate.
-"
+  "Add a policy to the current bundle, from a template.
+Prompt for a policy type and template, then for a name for the policy.
+Create the policy file and expand the template into it with yasnippet.
+Then open any resource file that the policy refers to."
   (interactive)
   (apigee-setup)
   (let* ((bundle (apigee--require-bundle))
@@ -1805,8 +1838,7 @@ appropriate.
           )))))
 
 (defun apigee--is-policy-file (s)
-  "returns true if the filename represents a policy file in the current
-proxy/sharedflow bundle"
+  "Return non-nil if the file S is a policy file in the current bundle."
   (when-let* ((s)
               (bundle (apigee--bundle)))
     (and (file-exists-p s)
@@ -1815,8 +1847,7 @@ proxy/sharedflow bundle"
                          (file-truename s)))))
 
 (defun apigee--current-policy-name ()
-  "returns the name of the current policy, if the current buffer
-is visiting a policy file. otherwise nil."
+  "Return the name of the policy the current buffer visits, or nil."
   (let ((current-filename (buffer-file-name)))
     (if (apigee--is-policy-file current-filename)
         (file-name-base current-filename))))
@@ -1847,8 +1878,9 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
           (setq replaced t))))
     replaced))
 
+;;;###autoload
 (defun apigee-rename-policy ()
-  "Rename a policy to a new name"
+  "Rename a policy, and update the references to it in the bundle."
   (interactive)
   (apigee-setup)
   (let* ((bundle (apigee--require-bundle))
@@ -1964,14 +1996,14 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
 ;;                       (setq file-list (cdr file-list)))))))))))
 
 (defun apigee--cleanup-newlines ()
-  "collapse multiple newlines"
+  "Collapse multiple newlines in the current buffer."
   (save-excursion
     (goto-char (point-min))
     (while (re-search-forward "\\(\n\s*\\)\\([\s]*\n\\)" (point-max) t)
       (replace-match (match-string 1)))))
 
 (defun apigee--cleanup-quotes ()
-  "replace escaped quote with quote character"
+  "Replace the &quot; escapes that `xml-print' writes with quote characters."
   (save-excursion
     (goto-char (point-min))
     (while (re-search-forward "\\([ =]\\)&quot;" (point-max) t)
@@ -1981,7 +2013,8 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
       (replace-match (concat "\"" (match-string 1))))))
 
 (defun apigee--serialize-xml-elt (elt)
-  "Serialize an XML element into the current buffer, and then collapse newlines."
+  "Replace the current buffer with the XML element ELT, tidied.
+Collapse blank lines, unescape quotes, and indent."
   (erase-buffer)
   (apigee--with-comment-preserving-xml
    (xml-print elt))
@@ -1992,7 +2025,8 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
   )
 
 (defun apigee--verify-exactly-one (file-list source-dir)
-  "verifies that there is exactly one xml file."
+  "Return the only file in FILE-LIST, or signal an error.
+SOURCE-DIR is where the files came from, for the message."
   (if (not file-list)
       (error "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir))
   (if (not (= (length file-list) 1))
@@ -2103,15 +2137,14 @@ are copied, and its :after-copy function, if any, is called. See
             (save-buffer 0))))))
 
 (defun apigee--new-asset-from-template (asset-type asset-name template-alist template-name containing-dir)
-  "Non-interactive function to create a new asset from a template.
+  "Create a new asset from a template, non-interactively.
 ASSET-TYPE - either \"proxy\" or \"sharedflow\".
 ASSET-NAME - name of the to-be-created asset.
 TEMPLATE-ALIST - the alist of templates.
 TEMPLATE-NAME - the name of the asset template, as stored in the
                 templates/<asset-type> directory.
 CONTAINING-DIR - name of an existing directory into which to insert the
-                 new asset.
-"
+                 new asset."
   (if (not (file-directory-p containing-dir))
       (error "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'"))
   (let ((template-match (assoc template-name template-alist))
@@ -2124,11 +2157,11 @@ CONTAINING-DIR - name of an existing directory into which to insert the
     (find-file-existing new-dir)))
 
 (defun apigee--fresh-recent-asset-homes (with-time)
-  "returns the list of recently used asset homes, eliminating stale entries
-and non-existent directories, in sorted order.  If WITH-TIME is non-nil,
-emit the list with time (suitable for persisting). Otherwise without -
-it will be a bare list of strings representing directory paths, suitable
-for use within an `completing-read'."
+  "Return the recently used asset homes, most recent first.
+Leave out entries older than 30 days and directories that no longer
+exist. If WITH-TIME is non-nil, return the entries with their times,
+suitable for persisting. Otherwise return just the directory names,
+suitable for use in `completing-read'."
   (let* ((days-considered-stale 30)
          (fresh (seq-filter (lambda (x)
                               (and
@@ -2142,13 +2175,13 @@ for use within an `completing-read'."
       (mapcar #'car result))))
 
 (defun apigee--time-is-within-days (the-time delta-days)
-  "Returns t if THE-TIME is less than DELTA-DAYS ago."
+  "Return non-nil if THE-TIME is less than DELTA-DAYS ago."
   (let ((delta-seconds (* 24 delta-days 60 60)))
     (< (float-time (time-subtract (current-time) the-time)) delta-seconds)))
 
 (defun apigee--prompt-for-containing-dir ()
-  "prompt user for a containing directory, and return it. Create the directory
-if necessary."
+  "Prompt for a directory to hold a new asset, and return it.
+Create the directory if necessary."
   (let ((candidate-list (cons default-directory (apigee--fresh-recent-asset-homes nil))))
     (let ((containing-dir
            (completing-read
@@ -2161,38 +2194,33 @@ if necessary."
       containing-dir)))
 
 
+;;;###autoload
 (defun apigee-new-proxy (want-prompt)
-  "Interactive fn that creates a new exploded proxy bundle directory
-structure. Prompts for the name of the API Proxy, and the base template
-for the proxy.
+  "Create a new exploded proxy bundle from a template.
+Prompt for the name of the API Proxy, and the base template for the
+proxy.
 
-When invoked with a prefix, this fn will prompt the user also for
-the name of the directory in which to store the apiproxy.
-
-When invoked without a prefix, it uses the most recent asset home
-directory. If no directory has ever been used, it prompts for the
-directory."
+With WANT-PROMPT (a prefix argument), also prompt for the directory in
+which to store the apiproxy. Without it, use the most recent asset home
+directory, or prompt if no directory has ever been used."
   (interactive "P")
   (apigee--new-asset "proxy" want-prompt))
 
 
+;;;###autoload
 (defun apigee-new-sharedflow (want-prompt)
-  "Interactive fn that creates a new exploded sharedflow bundle directory
-structure. Prompts for the name of the sharedflow, and the base template
-for the thing.
+  "Create a new exploded sharedflow bundle from a template.
+Prompt for the name of the sharedflow, and the base template for it.
 
-When invoked with a prefix, this fn will prompt the user also for
-the name of the directory in which to store the sharedflow.
-
-When invoked without a prefix, it uses the most recent asset home
-directory. If no directory has ever been used, it prompts for the
-directory."
+With WANT-PROMPT (a prefix argument), also prompt for the directory in
+which to store the sharedflow. Without it, use the most recent asset
+home directory, or prompt if no directory has ever been used."
   (interactive "P")
   (apigee--new-asset "sharedflow" want-prompt))
 
 
 (defun apigee--remember-asset-home (containing-dir)
-  "stores one directory with the current time in the list"
+  "Record CONTAINING-DIR, with the current time, as a recent asset home."
   (setq apigee--recently-used-asset-homes
         (seq-remove (lambda (x)  (equal (car x) containing-dir)) apigee--recently-used-asset-homes))
   (setq apigee--recently-used-asset-homes (cons (list containing-dir (decode-time nil t))
@@ -2205,23 +2233,13 @@ directory."
     value))
 
 (defun apigee--new-asset (asset-type want-prompt)
-  "Internal interactive fn that creates a new exploded asset directory
-structure. Prompts for the name of the asset, and the base template
-for the thing.
+  "Create a new exploded asset of ASSET-TYPE from a template.
+ASSET-TYPE is \"proxy\" or \"sharedflow\". Prompt for the name of the
+asset and its base template. With WANT-PROMPT, also prompt for the
+directory in which to store it; otherwise use the most recent asset
+home directory, or prompt if no directory has ever been used.
 
-When invoked with a prefix, this fn will prompt the user also for
-the name of the directory in which to store the asset.
-
-When invoked without a prefix, it uses the most recent asset home
-directory. If no directory has ever been used, it prompts for the
-directory.
-
-This fn is not intended to be called directly.
-
-ASSET-TYPE - either \"proxy\" or \"sharedflow\"
-WANT-PROMPT - whether invoked with a prefix
-
-"
+Called by `apigee-new-proxy' and `apigee-new-sharedflow'."
   (apigee-setup)
   (let ((alist-sym (apigee--asset-kind asset-type :templates)))
     (let ((asset-name
@@ -2257,6 +2275,7 @@ WANT-PROMPT - whether invoked with a prefix
 (defvar apigee--setup-done nil
   "Non-nil once `apigee-setup' has run.")
 
+;;;###autoload
 (defun apigee-setup ()
   "Set up apigee.el. Loading the file has no side effects; this does them.
 Restore the saved settings, load the templates, teach compilation mode
@@ -2284,8 +2303,8 @@ again does nothing. `unload-feature' undoes it."
     (setq apigee--setup-done t)))
 
 (defun apigee-unload-function ()
-  "Undo `apigee-setup', when `unload-feature' unloads apigee.
-Saves the settings first. Returns nil, so normal unloading continues."
+  "Undo `apigee-setup', for `unload-feature'.
+Save the settings first. Return nil, so normal unloading continues."
   (when apigee--setup-done
     (apigee--persist-state))
   (when (timerp apigee--timer)

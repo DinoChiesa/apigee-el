@@ -948,6 +948,48 @@ Return the parsed ProxyEndpoint element afterwards."
   (should (= 1 (seq-count (lambda (timer) (eq (timer--function timer) 'apigee--persist-state))
                           timer-list))))
 
+;;; Documentation (5.x)
+
+(ert-deftest apigee-test-5.1-header ()
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
+    (should (equal (lm-summary) "Work with Apigee API proxy and sharedflow bundles"))
+    (should (lm-code-start))
+    (should (string-match-p "lexical-binding: t" (buffer-substring (point-min) (line-end-position))))))
+
+(ert-deftest apigee-test-5.2-commands-are-autoloaded ()
+  "Every public interactive command has an autoload cookie."
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
+    (let (missing)
+      (mapatoms
+       (lambda (sym)
+         (when (and (commandp sym)
+                    (string-prefix-p "apigee-" (symbol-name sym))
+                    (not (string-prefix-p "apigee--" (symbol-name sym)))
+                    (not (string-prefix-p "apigee-get-" (symbol-name sym)))
+                    (equal (symbol-file sym 'defun)
+                           (expand-file-name "apigee.el" apigee-tests--dir)))
+           (goto-char (point-min))
+           (unless (re-search-forward (concat ";;;###autoload\n(defun " (regexp-quote (symbol-name sym)) " ")
+                                      nil t)
+             (push sym missing)))))
+      (should-not missing))))
+
+(ert-deftest apigee-test-5.3-checkdoc-clean ()
+  "checkdoc finds nothing to complain about (single-spaced sentences)."
+  (require 'checkdoc)
+  (let ((dir (make-temp-file "apigee-checkdoc" t)))
+    (unwind-protect
+        (with-temp-buffer
+          (call-process (expand-file-name invocation-name invocation-directory)
+                        nil t nil "-Q" "--batch"
+                        "--eval" "(progn (require 'checkdoc) (setq sentence-end-double-space nil))"
+                        "--eval" (format "(checkdoc-file %S)"
+                                         (expand-file-name "apigee.el" apigee-tests--dir)))
+          (should-not (string-match-p "apigee\\.el:[0-9]+:" (buffer-string))))
+      (delete-directory dir t))))
+
 ;;; Byte compilation (1.18, 2.9)
 
 (defconst apigee-tests--max-compile-warnings 0
