@@ -950,9 +950,8 @@ Return the parsed ProxyEndpoint element afterwards."
 
 ;;; Byte compilation (1.18, 2.9)
 
-(defconst apigee-tests--max-compile-warnings 7
-  "Byte-compiler warnings for apigee.el, as of the 2.1/2.2 commit.
-Lower this as review item 2.9 removes them; it should end at 0.")
+(defconst apigee-tests--max-compile-warnings 0
+  "Byte-compiler warnings allowed for apigee.el. Review item 2.9 got it to 0.")
 
 (defun apigee-tests--compile-warnings ()
   "Byte-compile a copy of apigee.el in a subprocess; return its warning lines."

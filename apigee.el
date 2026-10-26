@@ -175,9 +175,10 @@ program followed by arguments separated by spaces. A list is a program
 and its arguments. A program without a directory is looked up with
 `executable-find'. You can set the path explicitly in your emacs init
 file, for example,
-  (setf (alist-get 'apigeecli apigee-programs-alist) \"~/.apigeecli/bin/apigeecli\"
-        (alist-get 'gcloud apigee-programs-alist) \"~/gcloud-sdk/bin/gcloud\"
-    )"
+  (setf (alist-get \='apigeecli apigee-programs-alist)
+        \"~/.apigeecli/bin/apigeecli\"
+        (alist-get \='gcloud apigee-programs-alist)
+        \"~/gcloud-sdk/bin/gcloud\")"
   :type '(alist :key-type (symbol :tag "Program key")
                 :value-type (choice (string :tag "Program (and arguments)")
                                     (repeat :tag "Program and arguments" string)
@@ -837,11 +838,12 @@ resulting menu."
 
 
 (defun apigee-load-templates (top-level-dir &optional interactive)
-  "Load templates for proxies and policies from the top level directory TOP-LEVEL-DIR.
+  "Load the templates from the top-level directory TOP-LEVEL-DIR.
 
-Under TOP-LEVEL-DIR there should be sub-directories named \"policies\", \"proxies\",
-and \"sharedflows\".
-Within each of those, there will be templates for those entities."
+Under TOP-LEVEL-DIR there should be sub-directories named \"policies\",
+\"proxies\", \"sharedflows\" and \"targets\". Within each of those,
+there will be templates for those entities. With INTERACTIVE, report
+how many were loaded."
   (interactive
    (list
     (read-directory-name
@@ -1124,8 +1126,8 @@ available choices is the hierarchical list of available policies."
 
 
 (defun apigee--fixup-script-name (name &optional prefix)
-  "returns a stripped name suitable for use for a file in the resources/jsc directory,
-or resources/py, or resources/xsl."
+  "Return NAME stripped of PREFIX, for a file in resources/jsc.
+Or resources/py, or resources/xsl. PREFIX defaults to Javascript."
 
   (let* ((default-prefix "Javascript")
          (real-prefix (concat (downcase (if (stringp prefix) prefix default-prefix)) "-"))
@@ -1431,13 +1433,12 @@ Used as a predicate for `save-some-buffers'."
                 ;; When the user will edit the command, the token is filled in
                 ;; afterwards, so it never appears in the minibuffer.
                 (cmd (apigee--get-command command-symbol want-prompt want-prompt)))
-          (let ((name-function (lambda (mode) (concat "*" label " - " (symbol-name command-symbol) " - " bundle-name "*")))
+          (let ((name-function (lambda (_mode) (concat "*" label " - " (symbol-name command-symbol) " - " bundle-name "*")))
                 (remote-host
                  (save-match-data ; is usually a good idea
                    (and
                     (string-match "^/ssh:\\([^:]+\\):" bundle-dir)
-                    (match-string 1 bundle-dir))))
-                highlight-regexp)
+                    (match-string 1 bundle-dir)))))
             (when cmd
               (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
               (let ((default-directory (expand-file-name bundle-dir))
@@ -1483,7 +1484,7 @@ Used as a predicate for `save-some-buffers'."
                             ;; it seems comint sets a default-directory without the need for cd.
                             ;;(concat "cd " bundle-dir "; " actual-command-to-run)
                             actual-command-to-run
-                            t name-function highlight-regexp)))
+                            t name-function)))
                      (with-current-buffer buf
                        ;; obscure any token that appears, now and in later output
                        (apigee--mask-tokens-from (point-min))
@@ -2106,8 +2107,10 @@ are copied, and its :after-copy function, if any, is called. See
 ASSET-TYPE - either \"proxy\" or \"sharedflow\".
 ASSET-NAME - name of the to-be-created asset.
 TEMPLATE-ALIST - the alist of templates.
-TEMPLATE-NAME - the name of the asset template, as stored in the templates/<asset-type> directory.
-CONTAINING-DIR - name of an existing directory into which to insert the new asset.
+TEMPLATE-NAME - the name of the asset template, as stored in the
+                templates/<asset-type> directory.
+CONTAINING-DIR - name of an existing directory into which to insert the
+                 new asset.
 "
   (if (not (file-directory-p containing-dir))
       (error "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'"))
