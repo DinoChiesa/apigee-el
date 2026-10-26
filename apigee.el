@@ -71,8 +71,8 @@
 (require 'seq)
 (require 'xml)
 (require 'compile)
-(require 'dino-utility)
-(require 'dpc-sane-sorting)
+(require 'dc-xml)
+(require 'dc-sane-sorting)
 (require 'xml-to-string)
 (require 'dash) ;; magnars' functional lib, functions start with dash
 (require 'cl-lib) ; For assoc-if
@@ -715,7 +715,7 @@ choose a target type to insert."
         (template-name
          (completing-read
           "target template: "
-          (dpc-ss-completion-fn
+          (dc-ss/completion-fn
            (mapcar (lambda (x) (car x)) apigee--target-template-alist)
            'sorted-sanely)
           nil nil nil)))
@@ -801,7 +801,7 @@ Returns the path of selected items as a list of strings, or nil if aborted."
                            (format "%s (%s): " prompt-base (mapconcat #'identity selected-path " > "))
                          (format "%s: " prompt-base)))
                (raw-selection (completing-read prompt
-                                               (dpc-ss-completion-fn effective-options 'sorted-sanely)
+                                               (dc-ss/completion-fn effective-options 'sorted-sanely)
                                                nil t)))
 
           (unless raw-selection ; User aborted (e.g., C-g)
@@ -1517,7 +1517,7 @@ is visiting a policy file. otherwise nil."
         (def (apigee--current-policy-name)))
     (let* ((name-of-policy-to-rename
             (completing-read "rename policy: "
-                             (dpc-ss-completion-fn current-policies 'sorted-sanely)
+                             (dc-ss/completion-fn current-policies 'sorted-sanely)
                              predicate-ignored require-match initial-input hist def))
            (new-name (read-string (format "rename '%s' to : " name-of-policy-to-rename)
                                   name-of-policy-to-rename nil name-of-policy-to-rename)))
@@ -1819,7 +1819,7 @@ if necessary."
     (let ((containing-dir
            (completing-read
             "containing directory?: "
-            (dpc-ss-completion-fn
+            (dc-ss/completion-fn
              (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
                      (delq nil (delete-dups candidate-list)))
              'sorted-sanely)
@@ -1890,7 +1890,7 @@ PROMPT-ARG - whether invoked with a prefix
           (template
            (completing-read
             (format "%s template: " asset-type)
-            (dpc-ss-completion-fn
+            (dc-ss/completion-fn
              (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
              'sorted-sanely)
             nil nil nil))
