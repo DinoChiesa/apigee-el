@@ -105,7 +105,7 @@ variable. Set it to a truthy value to get logging.")
 
 (defvar apigee--list-of-vars-to-store-and-restore
   (list "apigee--verbose-logging" "apigee--recently-used-asset-homes"
-        "apigee--base-template-dir" "apigee--timer-minutes" "apigee-organization"
+        "apigee--base-template-dir" "apigee-organization"
         "apigee-environment" "apigee-service-account")
   "a list of variables to store/restore in the settings file.")
 
@@ -341,7 +341,10 @@ prompt the user."
 (defun apigee--restore-state ()
   "function expected to be called on initial module load, that restores the
 previous state of the module. Things like the most recently used
-apiproxy home, or the most recently loaded templates directory."
+apiproxy home, or the most recently loaded templates directory.
+
+A variable that already has a non-nil value, for example one set in the
+init file, keeps it; only unset variables are restored."
   (let ((dat-file-path (apigee--path-to-settings-file)))
     (if (file-exists-p dat-file-path)
         (with-temp-buffer
@@ -353,7 +356,8 @@ apiproxy home, or the most recently loaded templates directory."
                 (let ((setting-name (car one-setting)))
                   (if (and
                        (member setting-name apigee--list-of-vars-to-store-and-restore)
-                       (cadr one-setting))
+                       (cadr one-setting)
+                       (not (symbol-value (intern setting-name))))
                       (set (intern setting-name) (cadr one-setting))))))))
       )))
 
@@ -486,7 +490,7 @@ then set the symbol to the alist."
               (list (file-name-nondirectory template-name) template-name)
               template-list)
              (and apigee--verbose-logging (message "%s template %s" label template-name)))
-           (reverse (apigee--sort-by-string-car template-list))))
+           (apigee--sort-by-string-car template-list)))
     (list label (length (symbol-value sym)) top-level-dir)))
 
 (defun apigee-load-proxy-templates ()
@@ -529,7 +533,7 @@ to fill in for a new policy."
           (apigee--templates-for-one-policy-type policy-type)
           template-list)
          (and apigee--verbose-logging (message "policy type %s" policy-type)))
-       (reverse (apigee--sort-by-string-car template-list))))
+       (apigee--sort-by-string-car template-list)))
     (list "policy" (apigee--policy-template-count) top-level-dir)))
 
 
@@ -548,9 +552,7 @@ resulting menu."
                (list (apigee--trim-xml-suffix (file-name-nondirectory template-fname)) template-fname)
                template-list)
               (and apigee--verbose-logging (message "target template %s" template-fname)))
-            (let ((v (length template-list)))
-              (message "length of list %d" v))
-            (reverse (apigee--sort-by-string-car template-list))))
+            (apigee--sort-by-string-car template-list)))
     (list "target" (length apigee--target-template-alist) top-level-dir)))
 
 
@@ -939,7 +941,7 @@ expects it."
           (alist-get 'gcloud apigee-programs-alist))
          (resolved-pgm (apigee--resolve-program gcloud-pgm)))
     (if (not resolved-pgm)
-        (error (format "cannot resolve %s" gcloud-pgm)))
+        (error "cannot resolve %s" gcloud-pgm))
     (let* ((command-string (concat resolved-pgm " auth print-access-token"))
            (output (replace-regexp-in-string "\n$" "" (shell-command-to-string command-string)))
            (lines (split-string output "\n")))
@@ -969,11 +971,11 @@ expects it."
 (setq apigee--memoized-gcloud-pat (apigee--memoize-with-timeout #'apigee-gcloud-auth-print-access-token (* 1 60)))
 
 (defun apigee--concatenate-command-string (&rest ignored)
-  "Return the string that concatenates commands. On Linux this is
-semicolon (;), on Windows, double ampersand (&&)."
-  (cond
-   ((eq system-type 'windows-nt) "&&")
-   (t ";")))
+  "Return the string that joins two commands, running the second only if
+the first succeeds. Double ampersand (&&) does that in both POSIX shells
+and Windows cmd, so import-and-deploy does not deploy after a failed
+import."
+  "&&")
 
 
 (defun apigee--get-xmlschema-validator-program ()
@@ -1003,7 +1005,7 @@ environment and the ='validateBundle.py'= script, relative to
              (python-path (apigee--join-path-elements full-venv-dir python-executable-suffix)))
         (if (file-exists-p python-path)
             (format "%s %s" python-path validate-script)
-          (error (format "Python executable not found at %s" python-path))))
+          (error "Python executable not found at %s" python-path)))
     (error "Could not resolve XML Schema validator program. Check 'apigee-xmlschema-validator-home'")))
 
 (defun apigee--bundle-name (&rest _)
@@ -1100,7 +1102,7 @@ called, returns the program name/path string."
         (progn
           (let ((resolved-pgm (apigee--resolve-program program-val)))
             (if (not resolved-pgm)
-                (error (format "cannot resolve program '%s'" program-val)))
+                (error "cannot resolve program '%s'" program-val))
             (apigee--substitute-placeholder key resolved-pgm acc)))
       acc)))
 
@@ -1745,11 +1747,9 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
 (defun apigee--verify-exactly-one (file-list source-dir)
   "verifies that there is exactly one xml file."
   (if (not file-list)
-      (error
-       (message "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
+      (error "[apigee] cannot find XML file in %s, in `apigee--verify-exactly-one'" source-dir))
   (if (not (= (length file-list) 1))
-      (error
-       (message "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir)))
+      (error "[apigee] found more than one XML file in %s, in `apigee--verify-exactly-one'" source-dir))
   (nth 0 file-list))
 
 (defconst apigee--editor-temp-file-globs '("#*#" "*~" ".#*")
@@ -1773,6 +1773,17 @@ from the copies."
     (dolist (file (directory-files-recursively directory regexp))
       (delete-file file))))
 
+(defun apigee--xml-set-attribute (node attr value)
+  "Set attribute ATTR of xml.el NODE to VALUE, adding it if absent."
+  (if-let* ((cell (assq attr (xml-node-attributes node))))
+      (setcdr cell value)
+    (setcar (cdr node) (cons (cons attr value) (xml-node-attributes node)))))
+
+(defun apigee--xml-set-text (node text)
+  "Replace the children of xml.el NODE, if non-nil, with the string TEXT."
+  (when node
+    (setcdr (cdr node) (list text))))
+
 (defun apigee--copy-proxy-template-files (proxy-name source destination)
   "copy files from the SOURCE template directory to the DESTINATION directory,
 changing names and replacing / expanding things as appropriate."
@@ -1790,10 +1801,9 @@ changing names and replacing / expanding things as appropriate."
           (let*
               ((root (xml-parse-region (point-min) (point-max)))
                (apiproxy-elt (car root))
-               (apiproxy-elt-attrs (xml-node-attributes apiproxy-elt))
                (display-name-elt (car (xml-get-children apiproxy-elt 'DisplayName))))
-            (setcdr (assq 'name apiproxy-elt-attrs) proxy-name)
-            (setcar (cddr display-name-elt) proxy-name)
+            (apigee--xml-set-attribute apiproxy-elt 'name proxy-name)
+            (apigee--xml-set-text display-name-elt proxy-name)
             (apigee--serialize-xml-elt root))
           (save-buffer))))
 
@@ -1803,8 +1813,7 @@ changing names and replacing / expanding things as appropriate."
     (let* ((dest-proxyendpoints-dir (apigee--join-path-elements dest-apiproxy-dir "proxies"))
            (file-list (apigee--proper-files dest-proxyendpoints-dir ".xml")))
       (if (not file-list)
-          (error
-           (message "[apigee] cannot find XML file in %s, in `apigee--copy-proxy-template-files'" dest-proxyendpoints-dir)))
+          (error "[apigee] cannot find XML file in %s, in `apigee--copy-proxy-template-files'" dest-proxyendpoints-dir))
       (if (= (length file-list) 1)
           (with-current-buffer (find-file-noselect (car file-list))
             (let*
@@ -1812,7 +1821,7 @@ changing names and replacing / expanding things as appropriate."
                  (proxy-endpoint-elt (car root))
                  (http-proxy-conn-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
                  (basepath-elt (car (xml-get-children http-proxy-conn-elt 'BasePath))))
-              (setcar (cddr basepath-elt) (concat "/" proxy-name))
+              (apigee--xml-set-text basepath-elt (concat "/" proxy-name))
               (apigee--serialize-xml-elt root)
               )
             (save-buffer 0))))
@@ -1833,10 +1842,9 @@ changing names and replacing / expanding things as appropriate."
           (let*
               ((root (xml-parse-region (point-min) (point-max)))
                (sfbundle-elt (car root))
-               (sfbundle-elt-attrs (xml-node-attributes sfbundle-elt))
                (display-name-elt (car (xml-get-children sfbundle-elt 'DisplayName))))
-            (setcdr (assq 'name sfbundle-elt-attrs) sf-name)
-            (setcar (cddr display-name-elt) sf-name)
+            (apigee--xml-set-attribute sfbundle-elt 'name sf-name)
+            (apigee--xml-set-text display-name-elt sf-name)
             (apigee--serialize-xml-elt root))
           (save-buffer))))
     (apigee--copy-subdirs (list "sharedflows" "policies" "resources") source-sf-dir dest-sf-dir)))
@@ -1850,16 +1858,13 @@ TEMPLATE-NAME - the name of the asset template, as stored in the templates/<asse
 CONTAINING-DIR - name of an existing directory into which to insert the new asset.
 "
   (if (not (apigee--is-existing-directory containing-dir))
-      (error
-       (message "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'")))
+      (error "[apigee] containing-dir does not exist in `apigee--new-asset-from-template'"))
   (let ((template-match (assoc template-name template-alist))
         (new-dir (apigee--join-path-elements containing-dir asset-name)))
     (if (apigee--is-existing-directory new-dir)
-        (error
-         (message "[apigee] new-dir already exists in `apigee--new-asset-from-template'")))
+        (error "[apigee] new-dir already exists in `apigee--new-asset-from-template'"))
     (if (not template-match)
-        (error
-         (message "[apigee] unknown template in `apigee--new-asset-from-template'")))
+        (error "[apigee] unknown template in `apigee--new-asset-from-template'"))
     (let ((template-dir (cadr template-match))
           (copy-fn (intern (format "apigee--copy-%s-template-files" asset-type))))
       (funcall copy-fn asset-name template-dir new-dir))
@@ -1891,14 +1896,12 @@ for use within an `completing-read'."
 (defun apigee--prompt-for-containing-dir ()
   "prompt user for a containing directory, and return it. Create the directory
 if necessary."
-  (let ((homedir (concat (getenv "HOME") "/"))
-        (candidate-list (cons default-directory (apigee--fresh-recent-asset-homes nil))))
+  (let ((candidate-list (cons default-directory (apigee--fresh-recent-asset-homes nil))))
     (let ((containing-dir
            (completing-read
             "containing directory?: "
             (dc-ss/completion-fn
-             (mapcar (lambda (x) (replace-regexp-in-string homedir "~/" x))
-                     (delq nil (delete-dups candidate-list)))
+             (delete-dups (mapcar #'abbreviate-file-name (delq nil candidate-list)))
              'sorted-sanely)
             nil nil nil)))
       (and (not (file-exists-p containing-dir))
@@ -1943,6 +1946,12 @@ directory."
   (setq apigee--recently-used-asset-homes (cons (list containing-dir (decode-time nil t))
                                                 apigee--recently-used-asset-homes)))
 
+(defun apigee--require-input (value what)
+  "Return VALUE, or signal a `user-error' saying WHAT is required."
+  (if (s-blank? value)
+      (user-error "[apigee] %s is required" what)
+    value))
+
 (defun apigee--new-asset (asset-type prompt-arg)
   "Internal interactive fn that creates a new exploded asset directory
 structure. Prompts for the name of the asset, and the base template
@@ -1961,16 +1970,20 @@ ASSET-TYPE - either \"proxy\" or \"sharedflow\"
 PROMPT-ARG - whether invoked with a prefix
 
 "
-  (interactive "P")
   (let ((alist-sym (intern (format "apigee--%s-template-alist" asset-type))))
-    (let ((asset-name (read-string (format "%s name?: " asset-type) nil nil nil))
+    (let ((asset-name
+           (apigee--require-input
+            (read-string (format "%s name?: " asset-type) nil nil nil)
+            (format "A %s name" asset-type)))
           (template
-           (completing-read
-            (format "%s template: " asset-type)
-            (dc-ss/completion-fn
-             (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
-             'sorted-sanely)
-            nil nil nil))
+           (apigee--require-input
+            (completing-read
+             (format "%s template: " asset-type)
+             (dc-ss/completion-fn
+              (mapcar (lambda (x) (car x)) (symbol-value alist-sym))
+              'sorted-sanely)
+             nil t nil)
+            (format "A %s template" asset-type)))
           (containing-dir
            (if prompt-arg
                (apigee--prompt-for-containing-dir)
@@ -1998,8 +2011,13 @@ PROMPT-ARG - whether invoked with a prefix
          (setq apigee--base-template-dir (concat (file-name-directory apigee--load-file-name) "templates/")))
      (if apigee--base-template-dir
          (apigee-load-templates apigee--base-template-dir))
+     ;; Reloading the file must not start a second timer.
+     (when (timerp apigee-timer)
+       (cancel-timer apigee-timer))
      (setq apigee-timer
-      (run-with-timer (* 60 apigee--timer-minutes) (* 60 apigee--timer-minutes) 'apigee--persist-state))))
+      (run-with-timer (* 60 apigee--timer-minutes) (* 60 apigee--timer-minutes) 'apigee--persist-state))
+     ;; Also save on exit, so changes since the last timer run are kept.
+     (add-hook 'kill-emacs-hook #'apigee--persist-state)))
 
 (provide 'apigee)
 
