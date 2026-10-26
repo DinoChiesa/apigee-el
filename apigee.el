@@ -290,69 +290,6 @@ prompt when needed."
 Keyed by policy type, which is the name of a directory under
 templates/policies. A type with no entry uses the directory name.")
 
-(defconst apigee--http-status-message-alist
-  (list
-   '("200" "OK")
-   '("201" "Created")
-   '("302" "Moved")
-   '("304" "Not Modified")
-   '("400" "Bad Request")
-   '("401" "Not Authorized")
-   '("403" "Forbidden")
-   '("404" "Not Found")
-   '("410" "Gone")
-   '("429" "Too Many Requests")
-   '("500" "Server Error")
-   '("501" "Not Implemented")
-   '("503" "Server Busy")))
-
-
-(defconst apigee--message-payload-sample-alist
-  (list
-   '("application/json" "{
-  \"status\" : true,
-  \"message\" : \"whatever\",
-  \"clientId\" : \"{parsedRequest.client_id}\"
-}
-")
-   '("application/x-www-form-urlencoded" "status=true&clientId={parsedRequest.client_id}")
-   '("text/plain" "ok")
-   '("application/xml" "<message><here>{parsedRequest.client_id}</here></message>")
-   '("xml" "<AboutMe>
-  <Emplid>123</Emplid>
-  <Languages>German(Speaking)</Languages>
-  <Languages>German(Writing)</Languages>
-  <Languages>German(Reading)</Languages>
-  <Languages>French(Reading)</Languages>
-  <Languages>French(Speaking)</Languages>
-  <Languages>French(Writing)</Languages>
-  <Languages>English(Reading)</Languages>
-  <Languages>English(Writing)</Languages>
-  <Languages>English(Speaking)</Languages>
-</AboutMe>")
-   '("soap" "<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/' xmlns:ser='http://avatax.avalara.com/services'>
-  <soap:Header>
-    <wsse:Security xmlns:wsse='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'
-                   soap:actor='http://schemas.xmlsoap.org/soap/actor/next'>
-      <wsse:UsernameToken>
-        <wsse:Username>{avalara.username}</wsse:Username>
-        <wsse:Password>{avalara.username}</wsse:Password>
-      </wsse:UsernameToken>
-    </wsse:Security>
-    <ser:Profile>
-      <ser:Name>Apigee TEST</ser:Name>
-      <ser:Client>Apigee Edge Client</ser:Client>
-      <ser:Adapter>SOAP API</ser:Adapter>
-      <ser:Machine>MBPRO</ser:Machine>
-    </ser:Profile>
-  </soap:Header>
-  <soap:Body>
-    <ser:Ping/>
-  </soap:Body>
-</soap:Envelope>
-")))
-
-
 (defcustom apigee-lint-exclusions "TD002,TD007,TD012"
   "The comma-separated list of plugins to exclude from apigeelint."
   :type 'string)
@@ -694,24 +631,6 @@ so on. Called periodically, and when Emacs exits."
       (let ((print-length nil)) ;; to avoid truncating
         (pp alist-to-write (current-buffer))))))
 
-;; (defun apigee--join-path-elements (root &rest dirs)
-;;   "Joins a series of directories together, inserting slashes as necessary,
-;; like Python's os.path.join. TODO: figure out why I should not just use
-;; `file-name-concat'"
-;;   (if (not dirs)
-;;       root
-;;     (apply 'apigee--join-path-elements
-;;            (let ((first (car dirs)))
-;;              (if (s-suffix? "/" root)
-;;                  (concat root
-;;                          (if (s-prefix? "/" first)
-;;                              (substring first 1 (length first))
-;;                            first))
-;;                (if (s-prefix? "/" first)
-;;                    (concat root first)
-;;                  (concat root "/" (car dirs)))))
-;;            (cdr dirs))))
-
 (defun apigee--join-path-elements (root &rest dirs)
   "Join ROOT and DIRS with slashes, as Python's os.path.join does."
   (apply #'file-name-concat root dirs))
@@ -943,16 +862,6 @@ Return the arguments (\"--sa\" EMAIL), or nil for no service account."
   "Return S without a trailing .xml."
   (string-remove-suffix ".xml" s))
 
-;; 20250527-1816 - not needed now that I'm using the minibuffer
-;; (defun apigee--get-menu-position ()
-;;   "get the position for the popup menu"
-;;   (if (fboundp 'posn-at-point)
-;;       (let ((x-y (posn-x-y (posn-at-point (point)))))
-;;         (list (list (+ (car x-y) 10)
-;;                     (+ (cdr x-y) 20))
-;;               (selected-window)))
-;;     t))
-
 (defun apigee--find-bundle (flavor) ;; "apiproxy" or "sharedflowbundle"
   "Return (PATH TYPE) if `default-directory' is in a bundle of type FLAVOR.
 FLAVOR is \"apiproxy\" or \"sharedflowbundle\". PATH is the directory
@@ -1145,19 +1054,6 @@ type."
   (apigee--select-cascaded-choices
    (apigee--transform-policy-alist apigee--policy-template-alist)))
 
-
-(defun apigee--fixup-script-name (name &optional prefix)
-  "Return NAME stripped of PREFIX, for a file in resources/jsc.
-Or resources/py, or resources/xsl. PREFIX defaults to Javascript."
-
-  (let* ((default-prefix "Javascript")
-         (real-prefix (concat (downcase (if (stringp prefix) prefix default-prefix)) "-"))
-         (pos (length real-prefix)))
-    (if (and (>= (length name) (length real-prefix))
-             (string= real-prefix (downcase (substring name 0 pos))))
-        (let ((s (substring name pos)))
-          (concat (downcase (substring s 0 1)) (substring s 1)))
-      name)))
 
 (defun apigee--policy-name-is-available (policies-dir pname)
   "Return non-nil if no policy named PNAME exists in POLICIES-DIR."
@@ -1461,87 +1357,69 @@ organization, and let the user edit the command first."
                    (and
                     (string-match "^/ssh:\\([^:]+\\):" bundle-dir)
                     (match-string 1 bundle-dir)))))
-            (when cmd
-              (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
-              (let ((default-directory (expand-file-name bundle-dir))
-                    ;;(process-environment '("PATH=foobar"))
-                    )
-                ;; Chapter 1. trying to get compilation-start over Tramp to use bash
-                ;; 20261026: outcome still unknown; nothing tests this over Tramp.
-                (when remote-host
-                  (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
-                         (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
-                         (item
-                          (seq-find (lambda (entry)
-                                      (and (equal (car entry) safe-ssh-spec-pattern)
-                                           (equal (cadr entry) "remote-shell")))
-                                    tramp-connection-properties)))
-                    (if (not item)
-                        (add-to-list 'tramp-connection-properties
-                                     (list safe-ssh-spec-pattern
-                                           "remote-shell" "/bin/bash")))))
-                ;; 20250301-0426
-                ;;
-                ;; If I use nil here for mode (later: mode?), I cannot mask the token, and the output
-                ;; is not displayed very quickly. If I use t, then the code can mask
-                ;; the token, and the output gets displayed much more quickly. The
-                ;; experience is better.  The one downside: the compilation is shown in
-                ;; comint mode, which I theoretically don't want - it's not
-                ;; interactive. But I don't care that much.
-                ;;
-                ;; 20261026: outcome. With t, the masking works through
-                ;; `comint-output-filter-functions'. `compilation-filter-hook'
-                ;; never runs in comint mode, so it was never what masked the
-                ;; token.
-                (with-connection-local-variables
-                 (let (
-                       ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
-                       ;; Not sure which, if any, are required here.
-                       ;; 20261026: they are declared special at the top of the
-                       ;; file, so these bindings are dynamic, compiled or not.
-                       ;; Whether Tramp needs them is still untested.
-                       (tramp-default-remote-shell "/bin/bash")
-                       (tramp-encoding-shell "/bin/bash"))
-                   (let* ((actual-command-to-run
-                           ;; If a prefix was used, prompt the user to edit the command.
-                           ;; The token is still the placeholder %t at this point.
-                           (if want-prompt
-                               (apigee--insert-token
-                                (read-shell-command "Run build command: " cmd))
-                             cmd))
-                          (buf
-                           (compilation-start
-                            ;; 20251115-1240
-                            ;; it seems comint sets a default-directory without the need for cd.
-                            ;;(concat "cd " bundle-dir "; " actual-command-to-run)
-                            actual-command-to-run
-                            t name-function)))
-                     (with-current-buffer buf
-                       ;; obscure any token that appears, now and in later output
-                       (apigee--mask-tokens-from (point-min))
-                       (add-hook 'comint-output-filter-functions #'apigee--mask-secrets nil t)
-                       (add-hook 'compilation-start-hook #'apigee--mask-command-echo nil t)
-                       (setq buffer-read-only t))))))))
+            (save-some-buffers nil (lambda () (apigee--has-same-bundle-root bundle-dir)))
+            (let ((default-directory (expand-file-name bundle-dir))
+                  ;;(process-environment '("PATH=foobar"))
+                  )
+              ;; Chapter 1. trying to get compilation-start over Tramp to use bash
+              ;; 20261026: outcome still unknown; nothing tests this over Tramp.
+              (when remote-host
+                (let* ((ssh-spec-pattern (concat "/ssh:" remote-host ":"))
+                       (safe-ssh-spec-pattern (regexp-quote ssh-spec-pattern))
+                       (item
+                        (seq-find (lambda (entry)
+                                    (and (equal (car entry) safe-ssh-spec-pattern)
+                                         (equal (cadr entry) "remote-shell")))
+                                  tramp-connection-properties)))
+                  (if (not item)
+                      (add-to-list 'tramp-connection-properties
+                                   (list safe-ssh-spec-pattern
+                                         "remote-shell" "/bin/bash")))))
+              ;; 20250301-0426
+              ;;
+              ;; If I use nil here for mode (later: mode?), I cannot mask the token, and the output
+              ;; is not displayed very quickly. If I use t, then the code can mask
+              ;; the token, and the output gets displayed much more quickly. The
+              ;; experience is better.  The one downside: the compilation is shown in
+              ;; comint mode, which I theoretically don't want - it's not
+              ;; interactive. But I don't care that much.
+              ;;
+              ;; 20261026: outcome. With t, the masking works through
+              ;; `comint-output-filter-functions'. `compilation-filter-hook'
+              ;; never runs in comint mode, so it was never what masked the
+              ;; token.
+              (with-connection-local-variables
+               (let (
+                     ;; Chapter 2. trying to get compilation-start over Tramp to use bash.
+                     ;; Not sure which, if any, are required here.
+                     ;; 20261026: they are declared special at the top of the
+                     ;; file, so these bindings are dynamic, compiled or not.
+                     ;; Whether Tramp needs them is still untested.
+                     (tramp-default-remote-shell "/bin/bash")
+                     (tramp-encoding-shell "/bin/bash"))
+                 (let* ((actual-command-to-run
+                         ;; If a prefix was used, prompt the user to edit the command.
+                         ;; The token is still the placeholder %t at this point.
+                         (if want-prompt
+                             (apigee--insert-token
+                              (read-shell-command "Run build command: " cmd))
+                           cmd))
+                        (buf
+                         (compilation-start
+                          ;; 20251115-1240
+                          ;; it seems comint sets a default-directory without the need for cd.
+                          ;;(concat "cd " bundle-dir "; " actual-command-to-run)
+                          actual-command-to-run
+                          t name-function)))
+                   (with-current-buffer buf
+                     ;; obscure any token that appears, now and in later output
+                     (apigee--mask-tokens-from (point-min))
+                     (add-hook 'comint-output-filter-functions #'apigee--mask-secrets nil t)
+                     (add-hook 'compilation-start-hook #'apigee--mask-command-echo nil t)
+                     (setq buffer-read-only t)))))))
         (error "Can't find bundle name, or can't resolve command"))
     (user-error "[apigee] You do not appear to be in an API proxy or sharedflow directory")))
 
-
-;; (compilation-start (concat "cd " bundle-dir "; " cmd) t name-function highlight-regexp)
-;; ;;(run-with-timer 6 nil #'apigee--remove-compilation-filter-hook )
-;; ))))
-
-;; ;; if I use nil here for mode, I cannot mask the token
-;; ;; if I yuse t, then the code can mask the token.
-;; ;; is it a race condition?
-;; (let ((buf
-;;        (compilation-start (concat "cd " bundle-dir "; " cmd) nil name-function highlight-regexp)))
-;;   (with-current-buffer buf
-;;     ;; obscure any token that appears
-;;     (save-excursion
-;;       (beginning-of-buffer)
-;;       (while (re-search-forward "--token \\([^ \n]+\\)" nil t)
-;;         (replace-match "--token ***masked***")))
-;;     (setq buffer-read-only t)))))))
 
 ;;;###autoload
 (defun apigee-lint-asset (want-prompt)
@@ -1737,34 +1615,6 @@ of them, NEW-CHILD becomes its last child."
       (setq cell (cdr cell)))
     (setcdr cell (cons new-child (cdr cell)))))
 
-;; (defun apigee--diag-parse ()
-;;   (interactive)
-;;   (let*
-;;       ((root (xml-parse-region (point-min) (point-max)))
-;;        (proxy-endpoint-elt (car root))
-;;        (first (-first (lambda (sym) (apigee--xml-locate-first-child-node proxy-endpoint-elt sym))
-;;                       '(PreFlow PostFlow PostClientFlow Flows FaultRules)))
-;;        (position-index (apigee--xml-locate-first-child-node proxy-endpoint-elt first))
-;;        (the-cdr (cdr (nthcdr position-index proxy-endpoint-elt))))))
-;;
-;;
-;;     ;;    (faultrules-elt (car (xml-get-children proxy-endpoint-elt 'FaultRules)))
-;;     ;;    (default-faultrule-elt (car (xml-get-children proxy-endpoint-elt 'DefaultFaultRule)))
-;;     ;;    (httpproxyconnection-elt (car (xml-get-children proxy-endpoint-elt 'HTTPProxyConnection)))
-;;     ;;    (preflow-elt (car (xml-get-children proxy-endpoint-elt 'PreFlow)))
-;;     ;;    (preflow-response-elt (car (xml-get-children preflow-elt 'Response)))
-;;     ;;    (postclientflow-elt (car (xml-get-children proxy-endpoint-elt 'PostClientFlow)))
-;;     ;;    (postflow-elt (car (xml-get-children proxy-endpoint-elt 'PostFlow)))
-;;     ;;    (flows-elt (car (xml-get-children proxy-endpoint-elt 'Flows)))
-;;     ;;    (dest-elt (or default-faultrule-elt faultrules-elt httpproxyconnection-elt))
-;;     ;;    (new-preflow-elt
-;;     ;;     (car (apigee--parse-xml "<PreFlow><Request/><Response/></PreFlow>"))))
-;;     ;; ;;(setcdr new-preflow-elt (cddr dest-elt))
-;;     ;; (setcdr (cddr dest-elt) new-preflow-elt)
-;;     ;; (apigee--serialize-xml-elt root)))
-
-
-
 (defun apigee--parse-xml (xml-string)
   "Parse XML-STRING, keeping comments; return a list of xml.el nodes."
   (with-temp-buffer
@@ -1942,58 +1792,6 @@ AM-Foo does not touch AM-Foo-1. Return non-nil if anything was replaced."
                         (funcall process-one-file one-file))))
                 (message "made %d changes" count-of-changes)))))))))
 
-
-;; (defun apigee-maybe-sync-policy-filename ()
-;;   "synchronizes the name of the file with the name specified in the name
-;; attribute in the root element, if the file is a policy file.
-;;
-;; This function is normally used as an after-save-hook, and normally only in an
-;; xml-mode (such as `nxml-mode'), since policy files are XML files.
-;;
-;; With this hook, the human can modify the name attribute inside the XML, and
-;; save the file; and then that change gets reflected in the filename for the buffer
-;; and also in every other file in the API-proxy bundle.
-;; "
-;;   (interactive)
-;;   (let ((orig-filename (buffer-file-name)))
-;;     (if (apigee--is-policy-file orig-filename)
-;;         (let* ((orig-policyname (file-name-sans-extension (file-name-nondirectory orig-filename)))
-;;                (root (xml-parse-region))
-;;                (policy (car root))
-;;                (attrs (xml-node-attributes policy))
-;;                (new-policyname (cdr (assq 'name attrs))))
-;;           (if (and new-policyname
-;;                    (not (s-equals-p orig-policyname new-policyname)))
-;;               (let* ((new-short-filename (concat new-policyname ".xml"))
-;;                      (new-filename
-;;                       (concat (file-name-directory orig-filename) new-short-filename)))
-;;                 (rename-file orig-filename new-filename 1)
-;;                 (rename-buffer new-short-filename t) ;; get unique buffer name
-;;                 (set-visited-file-name new-filename) ;; sets modified flag t
-;;                 (set-buffer-modified-p nil)
-;;                 ;; now, search/replace all files in the apiproxy to replace
-;;                 ;; that old policy name with the new policy name.
-;;                 (let ((policy-buffer-name (buffer-name))
-;;                       (file-list (apigee-all-files-in-apiproxy))
-;;                       (re1 (concat "\\<" (regexp-quote orig-policyname) "\\>")))
-;;                   (while file-list
-;;                     (let* ((one-file (car file-list))
-;;                            (base-filename (file-name-nondirectory one-file)))
-;;                       (if (not (or (s-starts-with? "#" base-filename)
-;;                                    (s-starts-with? ".#" base-filename)))
-;;                           (with-current-buffer (find-file-noselect one-file)
-;;                             (save-excursion
-;;                               (goto-char (point-min))
-;;                               (let ((need-save nil)
-;;                                     (original-modified (buffer-modified-p)))
-;;                                 (while (re-search-forward re1 nil t)
-;;                                   (replace-match new-policyname)
-;;                                   (setq need-save t))
-;;                                 (if (and need-save
-;;                                          (not original-modified)
-;;                                          (not (s-equals-p policy-buffer-name (buffer-name))))
-;;                                     (save-buffer))))))
-;;                       (setq file-list (cdr file-list)))))))))))
 
 (defun apigee--cleanup-newlines ()
   "Collapse multiple newlines in the current buffer."
@@ -2261,16 +2059,6 @@ Called by `apigee-new-proxy' and `apigee-new-sharedflow'."
       (apigee--remember-asset-home containing-dir)
       (apigee--new-asset-from-template asset-type asset-name (symbol-value alist-sym) template containing-dir))))
 
-
-;; 20250527-1829 - no longer using popup.
-;; ;; override the impl in popup.el - it's broken for me for cascaded menus - 20230627-1541
-;; (defun popup-child-point (popup &optional offset)
-;;   (overlay-end
-;;    (popup-line-overlay popup (popup-selected-line popup))))
-
-;;      ;; customize the popup font
-;; (set-face-attribute 'popup-menu-face nil :height 105)
-;; (set-face-attribute 'popup-menu-selection-face nil :height 105)
 
 (defvar apigee--setup-done nil
   "Non-nil once `apigee-setup' has run.")

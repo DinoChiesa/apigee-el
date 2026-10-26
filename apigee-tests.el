@@ -990,6 +990,18 @@ Return the parsed ProxyEndpoint element afterwards."
           (should-not (string-match-p "apigee\\.el:[0-9]+:" (buffer-string))))
       (delete-directory dir t))))
 
+;;; Dead code (6.x)
+
+(ert-deftest apigee-test-6-dead-code-is-gone ()
+  (dolist (fn '(apigee--fixup-script-name apigee--remove-compilation-filter-hook))
+    (should-not (fboundp fn)))
+  (dolist (var '(apigee--http-status-message-alist apigee--message-payload-sample-alist))
+    (should-not (boundp var)))
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "apigee.el" apigee-tests--dir))
+    ;; No commented-out definitions.
+    (should-not (re-search-forward "^;+ *(def\\(un\\|macro\\|var\\) " nil t))))
+
 ;;; Byte compilation (1.18, 2.9)
 
 (defconst apigee-tests--max-compile-warnings 0
